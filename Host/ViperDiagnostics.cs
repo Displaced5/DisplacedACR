@@ -180,7 +180,8 @@ internal sealed class ViperDiagnostics(ViperSettings settings) : IDisposable
     }
     private static string TargetText() => PRCore.Target is { } t ? $"{t.Name} ({t.EntityId:X})" : "无目标";
     internal static string ResourceText(Snapshot s) =>
-        $"灵力 {s.Gauge} | 蛇魂 {s.Coils} | 祖灵力 {s.Tribute} | 蛇剑 {s.DreadCombo} | 蛇尾 {s.TailCombo} | GCD {s.GcdElapsed:F2}/{s.GcdRemaining:F2}s | 距离 {s.Distance:F2}m";
+        $"灵力 {s.Gauge} | 蛇魂 {s.Coils} | 祖灵力 {s.Tribute} | 蛇剑 {s.DreadCombo} | 蛇尾 {s.TailCombo} | GCD {s.GcdElapsed:F2}/{s.GcdRemaining:F2}s | 距离 {s.Distance:F2}m" +
+        $" | 队伍人数 {s.PartySize} | 蛇灵气CD {s.Cd(Skills.SerpentsIre):F2}s | 免费祖灵 {s.Buff(Buffs.ReadyToReawaken):F2}s | 祖灵状态 {s.Has(Buffs.Reawakened)} | 蛇灵气可用 {s.CanUse(Skills.SerpentsIre)}";
     private static string QueueText() => string.Join(" | ", ActionQueueManager.GetQueueStatus().Select(x =>
         $"{x.Key}: {x.Value.Count} [{string.Join("; ", x.Value.Take(2))}]"));
 

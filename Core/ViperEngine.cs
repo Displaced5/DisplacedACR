@@ -43,7 +43,11 @@ public static class ViperEngine
         if (basicPending && s.ComboRemaining > 0 &&
             (o.Mode == CombatMode.Daily || s.ComboRemaining <= comboReserve))
             return Basic(s, aoe);
-        if (o.Mode == CombatMode.Daily && ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent) &&
+        var allowsBurst = ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent, s.PartySize);
+        if (allowsBurst && o.Burst && o.Reawaken && s.Has(Buffs.ReadyToReawaken) &&
+            Choose(s, Skills.Reawaken, "优先消耗祖灵降临预备") is { } preparedReawaken)
+            return preparedReawaken;
+        if (o.Mode == CombatMode.Daily && allowsBurst &&
             o.Burst && o.Reawaken && (s.Gauge >= 50 || s.Has(Buffs.ReadyToReawaken)) &&
             Choose(s, Skills.Reawaken, "日随：连招完成后优先祖灵降临") is { } dailyReawaken)
             return dailyReawaken;
@@ -114,9 +118,11 @@ public static class ViperEngine
         if (s.GcdRemaining < o.WeaveSafetySeconds) return null;
         if (Continuation(s) is { } continuation) return continuation;
         var cap = s.Level >= 88 ? 3 : 2;
-        if (o.Burst && o.SerpentsIre && ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent) &&
+        // Ire does not replace the active Reawaken combo; let the game's availability check decide.
+        // Blocking on Tribute/Reawakened here drifts its cooldown until the entire combo ends.
+        if (o.Burst && o.SerpentsIre && ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent, s.PartySize) &&
             s.SkillDistance <= 20 && s.Coils < cap && !s.Has(Buffs.ReadyToReawaken) &&
-            s.Tribute == 0 && !s.Has(Buffs.Reawakened) && s.Cd(Skills.SerpentsIre) <= 0.05f &&
+            s.Cd(Skills.SerpentsIre) <= 0.05f &&
             Choose(s, Skills.SerpentsIre, "蛇灵气按冷却使用，保留免费祖灵且不溢出蛇魂") is { } ire) return ire;
 
         if (o.AutoTrueNorth && !s.Has(Buffs.TrueNorth) && s.NeedsPositional &&
@@ -150,7 +156,7 @@ public static class ViperEngine
     {
         var vice = aoe ? Skills.Vicepit : Skills.Vicewinder;
         var viceReady = o.Cooldowns && s.Learned(vice) && s.Charges.GetValueOrDefault(Skills.Vicewinder) >= 1;
-        var allowBurst = ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent);
+        var allowBurst = ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent, s.PartySize);
         var ireReady = allowBurst && o.Burst && o.SerpentsIre && s.Learned(Skills.SerpentsIre) && s.Cd(Skills.SerpentsIre) <= 0.05f;
         var cap = s.Level >= 88 ? 3 : 2;
         if (s.Coils >= cap && (viceReady || ireReady) &&

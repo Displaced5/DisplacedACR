@@ -8,6 +8,7 @@ using PromeRotation.Helpers;
 using PromeRotation.Managers;
 using PromeRotation.Rotation;
 using PromeRotation.Updaters;
+using PromeRotation.UI.HotKey;
 using ViperACR.Core;
 using PRCore = PromeRotation.Core.Core;
 
@@ -48,7 +49,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         LegacyConfiguration.Migrate();
         ErosUIFramework.Configure("VPR", "蝰蛇剑士", QtList, _ => false, (_, _) => true,
             key => QtList.GetValueOrDefault(key), new Dictionary<string, (string key, bool invert)[]>(),
-            ["蛇行", "真北", "内丹", "浴血", "牵制", "冲刺"],
+            ["蛇行", "真北", "内丹", "浴血", "牵制", "冲刺", "极限技"],
             b => {
                 b.Fixed("蛇行", Skills.Slither, ActionType.OffGcd, ActionTargetType.Target,
                     () => IsTargetWithinAttackRange(actionId: Skills.Slither));
@@ -57,6 +58,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
                 b.Fixed("浴血", Skills.Bloodbath, ActionType.OffGcd, ActionTargetType.Self);
                 b.Fixed("牵制", 7549, ActionType.OffGcd, ActionTargetType.Target);
                 b.Fixed("冲刺", 3, ActionType.OffGcd, ActionTargetType.Self);
+                b.Execute("极限技", new ExecuteLogic(ViperLimitBreak.Queue), ViperLimitBreak.IconActionId);
             }, author: ReleaseInfo.Author, drawRotationSettings: DrawRotationSettings, drawOpenerSettings: DrawOpenerSettings);
         _settings = ViperSettings.Load(out _error);
         _diagnostics = new ViperDiagnostics(_settings);
@@ -330,7 +332,8 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
                 target.EntityId == state.TargetId && !target.IsDead && target.IsTargetable && target.CanUseAttackActionOn() &&
                 IsTargetWithinAttackRange(state.TargetId, id) &&
                 (id is not (Skills.SerpentsIre or Skills.Reawaken) ||
-                    ModePolicy.AllowsTargetBurst(CurrentMode, target.MaxHp > 0 ? 100f * target.CurrentHp / target.MaxHp : 100))
+                    ModePolicy.AllowsTargetBurst(CurrentMode, target.MaxHp > 0 ? 100f * target.CurrentHp / target.MaxHp : 100,
+                        HostSnapshot.PartySize()))
         };
     }
     public IOpener? GetOpener()
@@ -343,6 +346,8 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
             me.ClassJob.RowId != 41 || GameData.IsInPvPArea() ||
             target is not { IsDead: false, IsTargetable: true } || !target.CanUseAttackActionOn() ||
             TargetHelper.TargetHasInvincibilityStatus(target)) return null;
+        // A carried-over free Reawaken belongs to the dynamic priority, not another opener Ire.
+        if (me.GetStatusLeftTime(Buffs.ReadyToReawaken) > 0) return null;
         // Combat begins after the triggering hit. Avoid duplicating a manually used first Vicewinder.
         var firstUsed = (int)JobGaugeHelper.VPR.蛇剑连状态 == 1 ||
             _prepullAttack.IsRecentFirstHit(Environment.TickCount64, target.EntityId, Skills.Vicewinder);
@@ -445,7 +450,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         ErosUISettingsUI.DrawModeSwitchRow();
         var highEnd = CurrentMode == CombatMode.HighEnd;
         ImGui.TextWrapped(highEnd ? "高难模式：按基础设置中的起手方案开怪，后续标准循环保留爆发规划。" :
-            "日随模式：直接按实时循环有资源就用，选中目标已开战时自动接战；目标低于20%不使用蛇灵气、不启动祖灵，已开启的祖灵仍完成。");
+            "日随模式：直接按实时循环有资源就用，选中目标已开战时自动接战；非8人小队目标低于20%不使用蛇灵气、不启动祖灵，已开启的祖灵仍完成。");
         SettingRow.SectionTitle("循环参数");
         var threshold = _settings.AoeThreshold;
         if (ImGui.SliderInt("AOE 目标数", ref threshold, 2, 8)) _settings.AoeThreshold = threshold;

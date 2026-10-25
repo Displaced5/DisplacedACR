@@ -156,13 +156,17 @@ if (args.Length >= 2 && args[0] == "--validate-package")
             Console.WriteLine("Daily default, both modes JSON persistence and all four mode/opener policies: PASS.");
             var burstPolicy = assembly.GetType("ViperACR.Core.ModePolicy", true)!.GetMethod("AllowsTargetBurst")!;
             foreach (var highEnd in new[] { false, true })
+            foreach (var partySize in new[] { 0, 4, 7, 8 })
             foreach (var hp in new[] { 19.99f, 20f, 100f })
-                if ((bool)burstPolicy.Invoke(null, [Enum.Parse(modeType, highEnd ? "HighEnd" : "Daily"), hp])!
-                    != (highEnd || hp >= 20))
+                if ((bool)burstPolicy.Invoke(null, [Enum.Parse(modeType, highEnd ? "HighEnd" : "Daily"), hp, partySize])!
+                    != (highEnd || partySize == 8 || hp >= 20))
                     throw new InvalidOperationException("Daily target HP burst policy mismatch");
             if (assembly.GetType("ViperACR.Host.HostSnapshot", true)!.GetMethod("IsTargetInCombat", BindingFlags.NonPublic | BindingFlags.Static) == null)
                 throw new InvalidOperationException("Missing target combat state reader");
-            Console.WriteLine("Daily target HP 20 percent boundary / HighEnd exemption and real target combat API: PASS.");
+            var partyReader = assembly.GetType("ViperACR.Host.HostSnapshot", true)!.GetMethod("PartySize", BindingFlags.NonPublic | BindingFlags.Static);
+            if (partyReader == null || partyReader.ReturnType != typeof(int))
+                throw new InvalidOperationException("Missing live party size reader");
+            Console.WriteLine("Daily HP 20 percent boundary / eight-member exemption / HighEnd exemption and host party reader: PASS.");
             var tabs = (string[])assembly.GetType("ErosUI.ErosUISettingsWindow", true)!
                 .GetField("tabs", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
             if (tabs.Contains("起手设置") || !tabs.Contains("基础设置"))
@@ -172,6 +176,22 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                 env.GetProperty("DrawBasicSettings") == null || env.GetProperty("DrawDiagnostics") == null)
                 throw new InvalidOperationException("Missing extension/diagnostics/basic settings UI contract");
             var rotationType = assembly.GetType("ViperACR.Host.ViperRotation", true)!;
+            var limitBreak = assembly.GetType("ViperACR.Host.ViperLimitBreak", true)!;
+            var createLimitBreak = limitBreak.GetMethod("CreateAction", BindingFlags.NonPublic | BindingFlags.Static)!;
+            if (createLimitBreak.Invoke(null, [0u, 123u]) != null || createLimitBreak.Invoke(null, [200u, 0u]) != null)
+                throw new InvalidOperationException("Limit break must reject empty gauge/action or missing target");
+            foreach (var actionId in new uint[] { 200, 201, 34866 })
+            {
+                var action = createLimitBreak.Invoke(null, [actionId, 123u])!;
+                var actionType = action.GetType();
+                if ((uint)actionType.GetField("ActionId")!.GetValue(action)! != actionId ||
+                    actionType.GetField("Type")!.GetValue(action)!.ToString() != "LimitBreak" ||
+                    actionType.GetField("Target")!.GetValue(action)!.ToString() != "Target" ||
+                    (uint)actionType.GetProperty("NetworkTid")!.GetValue(action)! != 123u ||
+                    actionType.GetProperty("ExecutionGuard")!.GetValue(action) == null)
+                    throw new InvalidOperationException("Limit break action/queue/target/guard contract failed");
+            }
+            Console.WriteLine("Manual limit break: dynamic action ID, LimitBreak queue type, target binding and guard contract: PASS (no game actions).");
             DiagnosticsValidation.Run(assembly, pr, settings);
             BasicAutomationValidation.Run(assembly, pr);
             var snapshotType = assembly.GetType("ViperACR.Core.Snapshot", true)!;
@@ -339,6 +359,14 @@ if (args.Length > 0 && args[0] == "--inspect-dummy-names")
         PanicOnSheetChecksumMismatch = true, DefaultExcelLanguage = Language.ChineseSimplified });
     foreach (var row in nameData.Excel.GetSheet<BNpcName>()!.Where(row => row.RowId == 541 || row.Singular.ExtractText().Contains("木人")))
         Console.WriteLine($"{row.RowId}: {row.Singular.ExtractText()}");
+    return;
+}
+if (args.Length > 0 && args[0] == "--limit-break-data")
+{
+    using var lbData = new GameData(ClientDataPath(), new LuminaOptions {
+        PanicOnSheetChecksumMismatch = true, DefaultExcelLanguage = Language.ChineseSimplified });
+    foreach (var action in lbData.Excel.GetSheet<Lumina.Excel.Sheets.Action>()!.Where(a => a.RowId is 200 or 201 or 34866))
+        Console.WriteLine($"{action.RowId}: {action.Name.ExtractText()} icon={action.Icon} category={action.ActionCategory.RowId} job={action.ClassJob.RowId}");
     return;
 }
 if (args.Length >= 2 && args[0] == "--export-viper-icons")

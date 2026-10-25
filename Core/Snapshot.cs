@@ -7,8 +7,8 @@ public static class ModePolicy
 {
     public static bool UsesStandardOpener(CombatMode mode, bool standardSelected) =>
         mode == CombatMode.HighEnd && standardSelected;
-    public static bool AllowsTargetBurst(CombatMode mode, float targetHpPercent) =>
-        mode != CombatMode.Daily || targetHpPercent >= 20;
+    public static bool AllowsTargetBurst(CombatMode mode, float targetHpPercent, int partySize) =>
+        mode != CombatMode.Daily || partySize == 8 || targetHpPercent >= 20;
 }
 
 public sealed record RotationOptions
@@ -42,6 +42,7 @@ public sealed record Snapshot
     public bool LongArms { get; init; }
     public float SkillDistance => CombatRange.EffectiveDistance(Distance, LongArms);
     public int NearbyEnemies { get; init; } = 1;
+    public int PartySize { get; init; }
     public int Coils { get; init; }
     public int Gauge { get; init; }
     public int Tribute { get; init; }

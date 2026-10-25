@@ -1,4 +1,5 @@
 using System.Numerics;
+using ECommons.DalamudServices;
 using PromeRotation.Core;
 using PromeRotation.Extensions;
 using PromeRotation.Helpers;
@@ -11,6 +12,8 @@ namespace ViperACR.Host;
 
 internal static class HostSnapshot
 {
+    internal static int PartySize() => Svc.Party?.Length ?? 0;
+
     internal static unsafe bool IsTargetInCombat()
     {
         var target = PRCore.Target;
@@ -58,6 +61,7 @@ internal static class HostSnapshot
             Active = true, HasTarget = valid, TargetId = valid ? target!.EntityId : 0,
             Level = me.Level, Distance = distance, LongArms = ErosUI.ErosUISettings.Instance.LongArms,
             NearbyEnemies = valid ? (int)TargetHelper.EnemyInRange(ErosUI.ErosUISettings.Instance.LongArms ? 8 : 5) : 0,
+            PartySize = PartySize(),
             Coils = JobGaugeHelper.VPR.飞蛇之魂层数, Gauge = JobGaugeHelper.VPR.灵力值,
             Tribute = JobGaugeHelper.VPR.祖灵力档数,
             DreadCombo = (int)JobGaugeHelper.VPR.蛇剑连状态, TailCombo = (int)JobGaugeHelper.VPR.蛇尾术状态,

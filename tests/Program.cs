@@ -99,16 +99,52 @@ Check("非保留窗口消耗50灵力", Skills.Reawaken, G(State() with { Gauge =
 Check("关闭蛇剑冷却仍可消耗灵力", Skills.Reawaken, G(State() with { Gauge = 50 }, options with { Cooldowns = false }));
 Check("关闭爆发不祖灵", Skills.ReavingFangs, G(State() with { Gauge = 100 }, options with { Burst = false }));
 Check("增益不足不祖灵", Skills.ReavingFangs, G(Buff(State() with { Gauge = 100 }, Buffs.HuntersInstinct, 4)));
-Check("双祖灵准备要求26秒", Skills.ReavingFangs, G(Buff(Buff(State() with { Gauge = 50 }, Buffs.ReadyToReawaken), Buffs.HuntersInstinct, 20)));
+Check("免费祖灵优先于双祖灵增益储备", Skills.Reawaken, G(Buff(Buff(State() with { Gauge = 50 }, Buffs.ReadyToReawaken), Buffs.HuntersInstinct, 20)));
 Check("双祖灵准备充分", Skills.Reawaken, G(Buff(State() with { Gauge = 50 }, Buffs.ReadyToReawaken)));
-Check("蛇灵气刚用不立刻祖灵", Skills.ReavingFangs, G(Buff(State() with { Cooldowns = new() { [Skills.SerpentsIre] = 119.5f } }, Buffs.ReadyToReawaken)));
+Check("蛇灵气刚用有预备优先祖灵", Skills.Reawaken, G(Buff(State() with { Cooldowns = new() { [Skills.SerpentsIre] = 119.5f } }, Buffs.ReadyToReawaken)));
 Check("蛇魂封顶先消耗", Skills.UncoiledFury, G(State() with { Coils = 3, Charges = new() { [Skills.Vicewinder] = 2 } }));
 Check("未开启蛇剑不凭空蛇剑", Skills.ReavingFangs, G(State()));
 Check("蛇剑充能可用", Skills.Vicewinder, G(State() with { Charges = new() { [Skills.Vicewinder] = 1 } }));
 Check("蛇灵气可用", Skills.SerpentsIre, O(State() with { Cooldowns = new() { [Skills.SerpentsIre] = 0 } }));
 Check("蛇魂封顶不蛇灵气", null, O(State() with { Coils = 3, Cooldowns = new() { [Skills.SerpentsIre] = 0 } }));
 Check("免费祖灵未花不覆盖", null, O(Buff(State() with { Cooldowns = new() { [Skills.SerpentsIre] = 0 } }, Buffs.ReadyToReawaken)));
-Check("祖灵中不蛇灵气", null, O(State() with { Tribute = 2, Cooldowns = new() { [Skills.SerpentsIre] = 0 } }));
+Check("祖灵中蛇灵气就绪允许安全插入", Skills.SerpentsIre, O(State() with { Tribute = 2, Cooldowns = new() { [Skills.SerpentsIre] = 0 } }));
+foreach (var mode in Enum.GetValues<CombatMode>())
+{
+    var ireDuringReawaken = Buff(State() with { Tribute = 5, Gauge = 40, Coils = 2,
+        GcdElapsed = 0.65f, GcdRemaining = 1.22f,
+        Cooldowns = new() { [Skills.SerpentsIre] = 0 } }, Buffs.Reawakened);
+    var modeOptions = options with { Mode = mode };
+    Check($"{mode}日志回归：祖灵内冷却转好不等大蛇牙", Skills.SerpentsIre, O(ireDuringReawaken, modeOptions));
+    Check($"{mode}祖灵状态过渡包不额外推迟蛇灵气", Skills.SerpentsIre,
+        O(ireDuringReawaken with { Tribute = 0 }, modeOptions));
+    Check($"{mode}祖灵内续剑仍优先", Skills.FirstLegacy,
+        O(ireDuringReawaken with { TailCombo = 3 }, modeOptions));
+    Check($"{mode}祖灵内没有安全窗口仍不强插", null,
+        O(ireDuringReawaken with { GcdRemaining = 0.5f }, modeOptions));
+    Check($"{mode}祖灵内满魂仍不溢出", null,
+        O(ireDuringReawaken with { Coils = 3 }, modeOptions));
+    Check($"{mode}祖灵内不覆盖未花的免费祖灵", null,
+        O(Buff(ireDuringReawaken, Buffs.ReadyToReawaken), modeOptions));
+    Check($"{mode}祖灵内游戏不可用仍等待", null,
+        O(ireDuringReawaken with { UnusableOffGcd = [Skills.SerpentsIre] }, modeOptions));
+    Check($"{mode}祖灵内冷却未转好仍等待", null,
+        O(ireDuringReawaken with { Cooldowns = new() { [Skills.SerpentsIre] = 0.2f } }, modeOptions));
+    Check($"{mode}祖灵内蛇灵气QT关闭仍等待", null,
+        O(ireDuringReawaken, modeOptions with { SerpentsIre = false }));
+    Check($"{mode}祖灵内爆发QT关闭仍等待", null,
+        O(ireDuringReawaken, modeOptions with { Burst = false }));
+    for (var tribute = 5; tribute >= 1; tribute--)
+    {
+        var phase = ireDuringReawaken with { Tribute = tribute };
+        Check($"{mode}祖灵档{tribute}不阻挡蛇灵气", Skills.SerpentsIre, O(phase, modeOptions));
+        Check($"{mode}蛇灵气插入保持祖灵档{tribute}下一战技",
+            Skills.FirstGeneration + (uint)(5 - tribute), G(phase, modeOptions));
+    }
+    for (var tail = 3; tail <= 6; tail++)
+        Check($"{mode}祖灵续剑{tail}优先于就绪蛇灵气",
+            Skills.FirstLegacy + (uint)(tail - 3), O(ireDuringReawaken with { TailCombo = tail }, modeOptions));
+}
 Check("祖灵QT关闭不启动祖灵", Skills.ReavingFangs, G(State() with { Gauge = 100 }, options with { Reawaken = false }));
 Check("祖灵QT关闭不消费免费祖灵", Skills.ReavingFangs, G(Buff(State(), Buffs.ReadyToReawaken), options with { Reawaken = false }));
 Check("祖灵QT关闭仍完成已开祖灵", Skills.ThirdGeneration, G(State() with { Tribute = 3 }, options with { Reawaken = false }));
@@ -126,7 +162,7 @@ Check("日随50灵力不等蛇灵气", Skills.Reawaken, G(burstSoon, daily));
 Check("高难50灵力为爆发保留", Skills.ReavingFangs, G(burstSoon, options));
 Check("日随免费祖灵不强求双祖灵增益", Skills.Reawaken,
     G(Buff(Buff(State() with { Gauge = 50 }, Buffs.ReadyToReawaken), Buffs.HuntersInstinct, 18), daily));
-Check("高难双祖灵要求足够增益", Skills.ReavingFangs,
+Check("高难免费祖灵不等待双祖灵增益", Skills.Reawaken,
     G(Buff(Buff(State() with { Gauge = 50 }, Buffs.ReadyToReawaken), Buffs.HuntersInstinct, 18), options));
 var oneCoil = State() with { Coils = 1 };
 Check("日随最后一层蛇魂也使用", Skills.UncoiledFury, G(oneCoil, daily));
@@ -343,6 +379,31 @@ Check("日随20%边界允许蛇灵气", Skills.SerpentsIre,
 Check("高难残血仍可祖灵", Skills.Reawaken, G(State() with { TargetHpPercent = 1, Gauge = 90 }));
 Check("高难残血仍可蛇灵气", Skills.SerpentsIre,
     O(State() with { TargetHpPercent = 1, Cooldowns = new() { [Skills.SerpentsIre] = 0 } }));
+foreach (var size in new[] { 0, 1, 4, 7, 8, 9, 24 })
+foreach (var hp in new[] { 0.1f, 19.99f, 20f, 100f })
+{
+    var allowed = size == 8 || hp >= 20;
+    var partyState = State() with { PartySize = size, TargetHpPercent = hp, Gauge = 50,
+        Cooldowns = new() { [Skills.SerpentsIre] = 0 } };
+    Check($"日随人数{size}血量{hp}祖灵策略", allowed ? Skills.Reawaken : Skills.ReavingFangs, G(partyState, daily));
+    Check($"日随人数{size}血量{hp}预备祖灵策略", allowed ? Skills.Reawaken : Skills.ReavingFangs,
+        G(Buff(partyState, Buffs.ReadyToReawaken), daily));
+    Check($"日随人数{size}血量{hp}蛇灵气策略", allowed ? Skills.SerpentsIre : null, O(partyState, daily));
+    Check($"高难人数{size}血量{hp}预备祖灵无血量限制", Skills.Reawaken,
+        G(Buff(partyState, Buffs.ReadyToReawaken), options));
+}
+foreach (var mode in Enum.GetValues<CombatMode>())
+{
+    var modeOptions = options with { Mode = mode };
+    var prepared = Buff(State() with { Gauge = 0, Coils = 3, BuffTimes = [],
+        Charges = new() { [Skills.Vicewinder] = 2 }, Cooldowns = new() { [Skills.SerpentsIre] = 119.8f } }, Buffs.ReadyToReawaken);
+    Check($"{mode}预备优先于满魂蛇剑增益与蛇灵气缓冲", Skills.Reawaken, G(prepared, modeOptions));
+    Check($"{mode}预备祖灵QT关闭不使用", Skills.UncoiledFury, G(prepared, modeOptions with { Reawaken = false }));
+    Check($"{mode}预备爆发QT关闭不使用", Skills.UncoiledFury, G(prepared, modeOptions with { Burst = false }));
+    Check($"{mode}预备不打断当前祖灵", Skills.ThirdGeneration, G(prepared with { Tribute = 3 }, modeOptions));
+    for (var combo = 1; combo <= 6; combo++)
+        Assert($"{mode}预备不打断蛇剑蟒剑{combo}", G(prepared with { DreadCombo = combo }, modeOptions)?.ActionId != Skills.Reawaken);
+}
 Check("日随残血仍打强碎灵蛇", Skills.Vicewinder,
     G(State() with { TargetHpPercent = 1, Gauge = 100, Charges = new() { [Skills.Vicewinder] = 1 } }, daily));
 Check("日随残血仍打飞蛇", Skills.UncoiledFury,
@@ -447,6 +508,42 @@ foreach (var secondFacing in new[] { Facing.Flank, Facing.Rear })
     Assert("标准起手阶段完成不再重复", plan.Complete && plan.Next(State()) == null);
 }
 var invalidPlan = new StandardOpenerPlan();
+foreach (var facing in new[] { Facing.Flank, Facing.Rear })
+{
+    var preparedPlan = new StandardOpenerPlan();
+    var actions = preparedPlan.InitialSteps(false).Select(x => x.ActionId).ToList();
+    var firstCoil = State() with { DreadCombo = 1, NeedsPositional = true, Facing = facing };
+    actions.AddRange(preparedPlan.Next(firstCoil)!.Select(x => x.ActionId));
+    actions.AddRange(preparedPlan.Next(firstCoil with { DreadCombo = facing == Facing.Flank ? 2 : 3 })!.Select(x => x.ActionId));
+    var freeState = Buff(State() with { Gauge = 20 }, Buffs.ReadyToReawaken);
+    Assert($"标准起手{facing}预备超出范围不提交祖灵",
+        preparedPlan.Next(freeState with { Distance = 6 })![0].ActionId == Skills.Vicewinder);
+    // Use a fresh plan for the available free-Reawaken branch.
+    preparedPlan = new StandardOpenerPlan();
+    preparedPlan.Next(firstCoil);
+    preparedPlan.Next(firstCoil with { DreadCombo = facing == Facing.Flank ? 2 : 3 });
+    var freeSteps = preparedPlan.Next(freeState)!;
+    Assert($"标准起手{facing}第一套结束预备先于第二蛇剑", freeSteps[0].ActionId == Skills.Reawaken &&
+        freeSteps.Select(x => x.ActionId).SequenceEqual(StandardOpener.Steps.Skip(16).Take(10).Select(x => x.ActionId)));
+    actions.AddRange(freeSteps.Select(x => x.ActionId));
+    Assert($"标准起手{facing}祖灵进行中不重新蛇剑",
+        preparedPlan.Next(freeState with { Tribute = 3, DreadCombo = 9 }) == null);
+    Assert($"标准起手{facing}祖灵最后一档蛇剑状态归零仍等待",
+        preparedPlan.Next(freeState with { Tribute = 1, DreadCombo = 0 }) == null);
+    Assert($"标准起手{facing}祖灵状态过渡包仍等待",
+        preparedPlan.Next(Buff(State(), Buffs.Reawakened)) == null);
+    var afterFree = preparedPlan.Next(State())!;
+    Assert($"标准起手{facing}祖灵结束接第二蛇剑", afterFree.Single().ActionId == Skills.Vicewinder);
+    actions.AddRange(afterFree.Select(x => x.ActionId));
+    actions.AddRange(preparedPlan.Next(firstCoil)!.Select(x => x.ActionId));
+    actions.AddRange(preparedPlan.Next(firstCoil with { DreadCombo = facing == Facing.Flank ? 2 : 3 })!.Select(x => x.ActionId));
+    var finalSteps = preparedPlan.Next(State())!;
+    actions.AddRange(finalSteps.Select(x => x.ActionId));
+    Assert($"标准起手{facing}收尾不重复祖灵且完整", preparedPlan.Complete &&
+        finalSteps.Select(x => x.ActionId).SequenceEqual(StandardOpener.Steps.Skip(26).Select(x => x.ActionId)));
+    Assert($"标准起手{facing}仍17GCD且只使用一次祖灵",
+        actions.Count(x => x != 0 && !Skills.IsOffGcd(x)) == 17 && actions.Count(x => x == Skills.Reawaken) == 1);
+}
 Assert("失去目标不推进标准起手", invalidPlan.Next(State() with { HasTarget = false, DreadCombo = 1 }) == null);
 Assert("脱战不推进标准起手", invalidPlan.Next(State() with { Active = false, DreadCombo = 1 }) == null);
 var abilityWindow = new AbilityWindow();
