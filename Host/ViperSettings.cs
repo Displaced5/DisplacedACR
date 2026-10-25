@@ -20,7 +20,7 @@ public sealed class ViperSettings
     public float TargetLineBlue { get; set; } = 0.7f;
     public float TargetLineThickness { get; set; } = 2;
     public static string FilePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "XIVLauncherCN", "pluginConfigs", "PromeRotation", "ACR", "ViperACR", "settings.json");
+        "XIVLauncherCN", "pluginConfigs", "PromeRotation", "ACR", ReleaseInfo.Author, "settings.json");
     public static ViperSettings Load(out string error)
     {
         error = "";

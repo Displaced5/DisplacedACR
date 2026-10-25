@@ -14,8 +14,10 @@ public sealed class AbilityWindow
         if (!_observed || elapsed + 0.05f < _lastElapsed || remaining > _lastRemaining + 0.1f) _used = 0;
         _observed = true; _lastElapsed = elapsed; _lastRemaining = remaining;
     }
+    public static int Maximum(bool tripleWeave, int hostMaximum) =>
+        tripleWeave ? 3 : Math.Clamp(hostMaximum, 0, 2);
     public bool CanSubmit(uint action, long now, int maximum) =>
-        _used < Math.Clamp(maximum, 0, 2) &&
+        _used < Math.Clamp(maximum, 0, 3) &&
         (_lastSubmit == long.MinValue || now - _lastSubmit >= 600) &&
         (!_recent.TryGetValue(action, out var last) || now - last >= 650);
     public void Record(uint action, long now) { _used++; _lastSubmit = now; _recent[action] = now; }

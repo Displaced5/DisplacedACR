@@ -1,6 +1,6 @@
 namespace ViperACR.Core;
 
-// IDs and targeting verified against the installed CN client; see docs/game-data.json.
+// Action IDs, targeting and unlock levels for the CN client.
 public static class Skills
 {
     public const uint SteelFangs = 34606, ReavingFangs = 34607,

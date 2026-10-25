@@ -1,7 +1,7 @@
 param(
     [string]$DalamudDir = "$env:APPDATA\XIVLauncherCN\addon\Hooks\26-10-21-01",
     [string]$PromeDir = "$env:APPDATA\XIVLauncherCN\installedPlugins\PromeRotation\1.5.10.4",
-    [string]$RepositoryUrl = 'https://github.com/Displaced5/Displaced',
+    [string]$RepositoryUrl = 'https://github.com/Displaced5/DisplacedACR',
     [switch]$UseSdk,
     [switch]$Install
 )
@@ -47,7 +47,7 @@ if ($UseSdk) {
     if (-not $referenceDll) { throw '找不到 SDK 的 PromeRotation 引用程序集。' }
 }
 $referenceVersion = [System.Reflection.AssemblyName]::GetAssemblyName($referenceDll).Version.ToString()
-$package = Join-Path $PSScriptRoot 'dist\ViperACR'
+$package = Join-Path $PSScriptRoot 'dist\Displaced'
 New-Item -ItemType Directory -Path $package -Force | Out-Null
 foreach ($name in @('ViperACR.dll', 'ViperACR.deps.json')) {
     Copy-Item -LiteralPath (Join-Path $output $name) -Destination $package -Force
@@ -75,7 +75,7 @@ Compress-Archive -LiteralPath ($releaseFiles | ForEach-Object { Join-Path $packa
 $repository = $RepositoryUrl.TrimEnd('/')
 if ($repository -notmatch '^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$') { throw 'RepositoryUrl 必须是 GitHub HTTPS 仓库地址。' }
 $manifest = [ordered]@{
-    author = 'ViperACR'
+    author = 'Displaced'
     version = $version
     description = 'Displaced VPR - 蝰蛇剑士 PVE 自动循环，支持日随与高难模式。'
     supportedJobs = @([ordered]@{ job = 'VPR'; contentScope = 'All' })
@@ -88,7 +88,8 @@ $manifest = [ordered]@{
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'dist\repo.json') -Encoding utf8
 Write-Host "发布包：$archive；版本 $version；PR 引用 $referenceVersion"
 if ($Install) {
-    $target = Join-Path $env:APPDATA 'XIVLauncherCN\pluginConfigs\PromeRotation\ACR\ViperACR'
+    $configRoot = Join-Path $env:APPDATA 'XIVLauncherCN\pluginConfigs\PromeRotation'
+    $target = Join-Path $configRoot 'ACR\Displaced'
     New-Item -ItemType Directory -Path $target -Force | Out-Null
     $existing = Join-Path $target 'ViperACR.dll'
     if (Test-Path -LiteralPath $existing) {
@@ -97,5 +98,30 @@ if ($Install) {
     foreach ($name in $releaseFiles) { Copy-Item -LiteralPath (Join-Path $package $name) -Destination $target -Force }
     & $dotnetExe run --no-build --project (Join-Path $PSScriptRoot 'tools\HostTools\HostTools.csproj') -c Release -- --validate-package $target
     if ($LASTEXITCODE -ne 0) { throw '已安装目录 PR 校验失败' }
+    $legacy = [IO.Path]::GetFullPath((Join-Path $configRoot 'ACR\ViperACR'))
+    $acrRoot = [IO.Path]::GetFullPath((Join-Path $configRoot 'ACR'))
+    if ([IO.Path]::GetDirectoryName($legacy) -ne $acrRoot -or (Split-Path $legacy -Leaf) -ne 'ViperACR') { throw '旧目录路径校验失败' }
+    $oldSettings = Join-Path $legacy 'settings.json'
+    $newSettings = Join-Path $target 'settings.json'
+    if ((Test-Path -LiteralPath $oldSettings) -and -not (Test-Path -LiteralPath $newSettings)) {
+        Copy-Item -LiteralPath $oldSettings -Destination $newSettings
+    }
+    $oldUi = Join-Path $configRoot 'Settings\ACRConfig\ViperACR'
+    $newUi = Join-Path $configRoot 'Settings\ACRConfig\Displaced'
+    if (Test-Path -LiteralPath $oldUi) {
+        New-Item -ItemType Directory -Path $newUi -Force | Out-Null
+        foreach ($file in Get-ChildItem -LiteralPath $oldUi -Filter '*.json' -File) {
+            $destination = Join-Path $newUi $file.Name
+            if (-not (Test-Path -LiteralPath $destination)) { Copy-Item -LiteralPath $file.FullName -Destination $destination }
+        }
+    }
+    if (Test-Path -LiteralPath (Join-Path $legacy 'ViperACR.dll')) {
+        $archiveRoot = [IO.Path]::GetFullPath((Join-Path $configRoot 'ACR-Backups'))
+        $archiveDirectory = [IO.Path]::GetFullPath((Join-Path $archiveRoot ('ViperACR-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))))
+        if (-not $archiveDirectory.StartsWith($archiveRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw '备份路径校验失败' }
+        New-Item -ItemType Directory -Path $archiveRoot -Force | Out-Null
+        Move-Item -LiteralPath $legacy -Destination $archiveDirectory
+        Write-Host "旧包已归档：$archiveDirectory"
+    }
     Write-Host '已更新本机 ACR。请在 PR 中刷新并选择 Displaced VPR。'
 }

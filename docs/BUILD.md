@@ -18,9 +18,9 @@
 ./build.ps1 -DalamudDir $env:DALAMUD_HOME -PromeDir $env:PROME_HOME
 ```
 
-提供的目录应分别包含 `Dalamud.dll` 与 `PromeRotation.dll`。脚本会调用实际 PR 的包加载器与元数据校验器，检查 `ViperACR` 包身份、接口、起手、设置和事件契约，不连接游戏或发送技能。
+提供的目录应分别包含 `Dalamud.dll` 与 `PromeRotation.dll`。脚本会调用实际 PR 的包加载器与元数据校验器，检查 `Displaced` 包身份、接口、起手、设置和事件契约，不连接游戏或发送技能。
 
-公开 SDK 构建也可提供上述两个目录，在打包前验证 SDK 产物与实际宿主的兼容性。加 `-Install` 会备份并更新当前 Windows 用户的 ACR/ViperACR，保留配置文件。
+公开 SDK 构建也可提供上述两个目录，在打包前验证 SDK 产物与实际宿主的兼容性。加 `-Install` 会备份并更新当前 Windows 用户的 ACR/Displaced，迁移旧 ViperACR 配置，并将旧包归档至 ACR-Backups。
 
 若只编译主工程：
 

@@ -44,6 +44,10 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                 object?[] buildArgs = [type, null, null, null, true, folder, main, main, assembly, loader, null, null];
                 if (!(bool)build.Invoke(null, buildArgs)!) throw new InvalidOperationException((string?)buildArgs[11]);
                 candidates.Add(buildArgs[10]);
+                var metadata = type.GetCustomAttributesData().Single(a => a.AttributeType.Name == "RotationMetadataAttribute");
+                if (!Equals(metadata.ConstructorArguments[1].Value, "Displaced VPR") ||
+                    !Equals(metadata.ConstructorArguments[2].Value, "Displaced"))
+                    throw new InvalidOperationException("Rotation display name / author mismatch");
                 foreach (var name in new[] { "QtList", "Openers" })
                     _ = type.GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
                 var qts = (IReadOnlyDictionary<string, bool>)type.GetProperty("QtList")!.GetValue(null)!;
@@ -68,10 +72,10 @@ if (args.Length >= 2 && args[0] == "--validate-package")
             ui.GetMethod("Configure")!.Invoke(null, ["VPR", "蝰蛇剑士", qtsForUi,
                 (Func<string,bool>)(_ => false), (Func<string,bool,bool>)((_,_) => true),
                 (Func<string,bool>)(key => qtsForUi.GetValueOrDefault(key)),
-                new Dictionary<string,(string key,bool invert)[]>(), Array.Empty<string>(), null, "ViperACR", null,
+                new Dictionary<string,(string key,bool invert)[]>(), Array.Empty<string>(), null, "Displaced", null,
                 (System.Action)(() => uiDraws++), (System.Action)(() => openerDraws++)]);
             var env = assembly.GetType("ErosUI.ErosUIJobEnv", true)!;
-            if (!Equals(env.GetProperty("作者")!.GetValue(null), "ViperACR") ||
+            if (!Equals(env.GetProperty("作者")!.GetValue(null), "Displaced") ||
                 !Equals(env.GetProperty("JobTag")!.GetValue(null), "VPR")) throw new InvalidOperationException("ErosUI identity mismatch");
             ((System.Action)env.GetProperty("DrawRotationSettings")!.GetValue(null)!)();
             if (uiDraws != 1) throw new InvalidOperationException("ErosUI rotation settings callback mismatch");
@@ -119,6 +123,18 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                     throw new InvalidOperationException("Unlimited dash persistence mismatch");
             }
             Console.WriteLine("Extension settings: Unlimited Dash default Off and On/Off JSON persistence: PASS.");
+            var tripleField = modeSettingsType.GetField("TripleWeave")!;
+            if (!(bool)tripleField.GetValue(Activator.CreateInstance(modeSettingsType))! ||
+                !(bool)tripleField.GetValue(JsonSerializer.Deserialize("{}", modeSettingsType, jsonOptions))!)
+                throw new InvalidOperationException("Triple weave must default On for new and legacy settings");
+            foreach (var enabled in new[] { false, true })
+            {
+                tripleField.SetValue(modeSettings, enabled);
+                var restored = JsonSerializer.Deserialize(JsonSerializer.Serialize(modeSettings, modeSettingsType, jsonOptions), modeSettingsType, jsonOptions)!;
+                if ((bool)tripleField.GetValue(restored)! != enabled)
+                    throw new InvalidOperationException("Triple weave setting persistence mismatch");
+            }
+            Console.WriteLine("Triple weave: default On, legacy default and On/Off JSON persistence: PASS.");
             foreach (var highEnd in new[] { false, true })
             {
                 highEndField.SetValue(modeSettings, highEnd);

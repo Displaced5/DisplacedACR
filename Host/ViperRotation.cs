@@ -13,7 +13,7 @@ using PRCore = PromeRotation.Core.Core;
 
 namespace ViperACR.Host;
 
-[RotationMetadata(41u, "Displaced VPR", "ViperACR", ReleaseInfo.Version, ContentScope = AcrContentScope.All)]
+[RotationMetadata(41u, "Displaced VPR", ReleaseInfo.Author, ReleaseInfo.Version, ContentScope = AcrContentScope.All)]
 public sealed class ViperRotation : IRotation, IRotationLifecycle
 {
     public string RotationName => "Displaced VPR";
@@ -45,6 +45,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
 
     public ViperRotation()
     {
+        LegacyConfiguration.Migrate();
         ErosUIFramework.Configure("VPR", "蝰蛇剑士", QtList, _ => false, (_, _) => true,
             key => QtList.GetValueOrDefault(key), new Dictionary<string, (string key, bool invert)[]>(),
             ["蛇行", "真北", "内丹", "浴血", "牵制", "冲刺"],
@@ -56,7 +57,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
                 b.Fixed("浴血", Skills.Bloodbath, ActionType.OffGcd, ActionTargetType.Self);
                 b.Fixed("牵制", 7549, ActionType.OffGcd, ActionTargetType.Target);
                 b.Fixed("冲刺", 3, ActionType.OffGcd, ActionTargetType.Self);
-            }, author: "ViperACR", drawRotationSettings: DrawRotationSettings, drawOpenerSettings: DrawOpenerSettings);
+            }, author: ReleaseInfo.Author, drawRotationSettings: DrawRotationSettings, drawOpenerSettings: DrawOpenerSettings);
         _settings = ViperSettings.Load(out _error);
         _diagnostics = new ViperDiagnostics(_settings);
         ErosUIJobEnv.DrawBasicSettings = DrawBasicSettings;
@@ -309,7 +310,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         var options = Options();
         var result = ViperEngine.OffGcd(state, options) ?? ViperEngine.Continuation(state);
         if (result == null || !_abilityWindow.CanSubmit(result.ActionId, Environment.TickCount64,
-                PromeSettings.Instance.Hacks.MaxOgcdsPerGcd)) return null;
+                AbilityWindow.Maximum(ErosUISettings.Instance.TripleWeave, PromeSettings.Instance.Hacks.MaxOgcdsPerGcd))) return null;
         // Always is an actual queue type checked by this host. BypassOffGcdWindow is not read.
         var action = MakeAction(state, result, true, true);
         _abilityWindow.Record(result.ActionId, Environment.TickCount64);

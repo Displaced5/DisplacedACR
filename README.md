@@ -9,20 +9,24 @@
 在 PromeRotation 的 ACR 订阅/仓库管理中添加以下清单地址，然后下载安装：
 
 ```text
-https://github.com/Displaced5/Displaced/releases/latest/download/repo.json
+https://github.com/Displaced5/DisplacedACR/releases/latest/download/repo.json
 ```
 
-发布页面：[GitHub Releases](https://github.com/Displaced5/Displaced/releases/latest)。
+发布页面：[GitHub Releases](https://github.com/Displaced5/DisplacedACR/releases/latest)。
 
-手动安装时，将压缩包内容解压到 PromeRotation 配置目录下的 `ACR/ViperACR`，然后刷新外部 ACR，选择 **Displaced VPR**。压缩包内的 DLL 位于根目录，请勿再套一层目录。
+手动安装时，将压缩包内容解压到 PromeRotation 配置目录下的 `ACR/Displaced`，然后刷新外部 ACR，选择 **Displaced VPR**。压缩包内的 DLL 位于根目录，请勿再套一层目录。
 
-`ViperACR` 是宿主校验所用的包身份，也是现有配置目录名称。保留此名称以延续已有设置；它与界面显示名称不同。
+ACR 作者与加载目录为 `Displaced`，显示名称为 `Displaced VPR`。DLL 文件名继续为 `ViperACR.dll`。
+
+从旧版升级时，缺少的新作者配置会从旧 `ViperACR` 目录迁移，已有新配置优先。使用构建脚本安装会将旧包移到 ACR 扫描目录外备份。手动升级请先将旧 `ACR/ViperACR` 中的 `settings.json` 复制到新目录，并将 `Settings/ACRConfig/ViperACR` 的 JSON 复制到 `Settings/ACRConfig/Displaced`（不覆盖已有配置），然后将旧包移出 ACR 目录，避免同时加载两个循环。
 
 ## 功能
 
 - 日随模式使用动态循环；高难模式根据起手选择使用标准或动态起手。
+- 日随模式在不打断现有连招的前提下，优先使用祖灵降临；目标血量低于 20% 不启动祖灵降临或蛇灵气。
 - 内置标准起手按实时身位安排盘蛇顺序，倒计时蛇行为 500ms。
 - 提供 QT、技能悬浮面板、循环设置、拓展功能与开发诊断。
+- 拓展功能提供默认开启的三插开关；关闭时恢复原有插入次数上限，开启仍受动画锁、提交间隔和安全窗口约束。
 - 配置与诊断记录保存在本机，不包含在发布包中。
 
 ## 源码与构建

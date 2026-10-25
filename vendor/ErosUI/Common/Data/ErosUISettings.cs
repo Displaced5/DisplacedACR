@@ -41,6 +41,7 @@ public class ErosUISettings
     public bool IsHighEnd = false;
     public bool LongArms = true;
     public bool UnlimitedDashDistance = false;
+    public bool TripleWeave = true;
     public bool DeathAutoResetQt = true;
     public bool OpenerAutoPull = true;
     public bool OpenerAutoReleaseHold = true;

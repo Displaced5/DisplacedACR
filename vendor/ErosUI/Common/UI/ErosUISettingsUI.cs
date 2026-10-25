@@ -104,6 +104,12 @@ public static class ErosUISettingsUI
             ErosUISettings.Instance.UnlimitedDashDistance = unlimitedDash;
             ErosUISettings.Instance.Save();
         }
+        var tripleWeave = ErosUISettings.Instance.TripleWeave;
+        if (ImGui.Checkbox("三插", ref tripleWeave))
+        {
+            ErosUISettings.Instance.TripleWeave = tripleWeave;
+            ErosUISettings.Instance.Save();
+        }
     }
 
     // ============================================================

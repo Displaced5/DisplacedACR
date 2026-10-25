@@ -146,16 +146,34 @@ Check("日随蛇灵气照常就绪即用", Skills.SerpentsIre, O(State() with { 
 Check("日随关闭蛇灵气不使用", null, O(State() with { Cooldowns = new() { [Skills.SerpentsIre] = 0 } }, daily with { SerpentsIre = false }));
 Check("日随优先打完双牙", Skills.TwinfangBite,
     O(Buff(State() with { Cooldowns = new() { [Skills.SerpentsIre] = 0 } }, Buffs.HuntersVenom), daily));
-Check("日随未建疾速先基础连击", Skills.ReavingFangs, G(oneCoil with { Gauge = 100, BuffTimes = [] }, daily));
+Check("日随祖灵优先于建立增益", Skills.Reawaken, G(oneCoil with { Gauge = 100, BuffTimes = [] }, daily));
 Check("日随祖灵中途继续量谱", Skills.ThirdGeneration, G(State() with { Tribute = 3 }, daily));
-Check("日随蛇剑中途先完另一招", Skills.HuntersCoil, G(State() with { DreadCombo = 3, Gauge = 100 }, daily));
+Check("日随祖灵等待蛇剑完成", Skills.HuntersCoil, G(State() with { DreadCombo = 3, Gauge = 100 }, daily));
 Check("日随远离无魂仍飞蛇之牙", Skills.WrithingSnap, G(State() with { Distance = 6 }, daily));
 Check("日随三目标祖灵", Skills.Reawaken, G(State() with { NearbyEnemies = 3, Gauge = 50 }, daily));
 Check("日随三目标强碎灵蟒", Skills.Vicepit,
     G(State() with { NearbyEnemies = 3, Charges = new() { [Skills.Vicewinder] = 1 } }, daily));
-Check("日随不丢即将到期基础连击", Skills.SwiftskinsSting,
+Check("日随祖灵等待基础连击完成", Skills.SwiftskinsSting,
     G(secondHit with { ComboRemaining = 4, Gauge = 50, Coils = 1 }, daily));
 Check("日随不误用未解锁祖灵", Skills.ReavingFangs, G(State() with { Level = 80, Gauge = 50 }, daily));
+foreach (var combo in Enumerable.Range(1, 6))
+{
+    var pending = State() with { DreadCombo = combo, Gauge = 50, Coils = 3,
+        Charges = new() { [Skills.Vicewinder] = 2 }, BuffTimes = [] };
+    Assert($"日随祖灵不打断蛇剑蟒剑{combo}", G(pending, daily)?.ActionId != Skills.Reawaken);
+    Assert($"日随祖灵QT关闭保留蛇剑蟒剑{combo}", G(pending, daily with { Reawaken = false })?.ActionId != Skills.Reawaken);
+    Assert($"日随残血保留蛇剑蟒剑{combo}", G(pending with { TargetHpPercent = 19 }, daily)?.ActionId != Skills.Reawaken);
+}
+Check("日随免费祖灵无需增益优先满蛇魂", Skills.Reawaken,
+    G(Buff(State() with { Coils = 3, Gauge = 0, BuffTimes = [], Charges = new() { [Skills.Vicewinder] = 2 } }, Buffs.ReadyToReawaken), daily));
+Check("日随祖灵不可用回退蛇魂防溢出", Skills.UncoiledFury,
+    G(State() with { Gauge = 50, Coils = 3, Locked = [Skills.Reawaken], Charges = new() { [Skills.Vicewinder] = 2 } }, daily));
+Check("日随连招时间充足仍先完成第二段", Skills.SwiftskinsSting,
+    G(secondHit with { ComboRemaining = 29, Gauge = 50 }, daily));
+Check("日随连招完毕祖灵优先满魂和蛇剑", Skills.Reawaken,
+    G(State() with { Gauge = 50, Coils = 3, Charges = new() { [Skills.Vicewinder] = 2 } }, daily));
+Check("日随已过期连招不再阻挡祖灵", Skills.Reawaken,
+    G(secondHit with { ComboRemaining = 0, Gauge = 50 }, daily));
 Check("常规插入不压GCD", null, O(State() with { GcdRemaining = 0.6f, TailCombo = 1 }));
 Check("过期窗口仍可补救续剑", Skills.DeathRattle, ViperEngine.Continuation(State() with { GcdRemaining = 0, TailCombo = 1 }));
 for (var tail = 1; tail <= 6; tail++)
@@ -460,6 +478,20 @@ abilityWindow.Record(Skills.FirstLegacy, tick + 800);
 abilityWindow.Reset();
 Assert("脱战清空节流状态", abilityWindow.CanSubmit(Skills.FirstLegacy, tick + 801, 2));
 var basicAutomation = new BasicAutomation();
+Assert("开启三插覆盖宿主两插上限", AbilityWindow.Maximum(true, 2) == 3);
+Assert("关闭三插遵循宿主零或单插", AbilityWindow.Maximum(false, 0) == 0 && AbilityWindow.Maximum(false, 1) == 1);
+Assert("关闭三插最多两插", AbilityWindow.Maximum(false, 3) == 2);
+var tripleWindow = new AbilityWindow();
+tripleWindow.Observe(0.5f, 2);
+tripleWindow.Record(Skills.TwinfangBite, 1000);
+tripleWindow.Record(Skills.TwinbloodBite, 1600);
+Assert("两次双牙后两插模式禁止真北", !tripleWindow.CanSubmit(Skills.TrueNorth, 2200, AbilityWindow.Maximum(false, 2)));
+Assert("两次双牙后三插模式允许真北", tripleWindow.CanSubmit(Skills.TrueNorth, 2200, AbilityWindow.Maximum(true, 2)));
+Assert("三插仍遵守600ms间隔", !tripleWindow.CanSubmit(Skills.TrueNorth, 2199, 3));
+tripleWindow.Record(Skills.TrueNorth, 2200);
+Assert("三插后拒绝第四插", !tripleWindow.CanSubmit(Skills.SerpentsIre, 2800, 3));
+tripleWindow.Observe(0.1f, 2.4f);
+Assert("新GCD恢复三插次数", tripleWindow.CanSubmit(Skills.SerpentsIre, 2800, 3));
 Assert("存活不重置QT", !basicAutomation.ObserveDeath(false, true));
 Assert("死亡第一次重置QT", basicAutomation.ObserveDeath(true, true));
 Assert("持续死亡不反复覆盖QT", !basicAutomation.ObserveDeath(true, true));
@@ -509,6 +541,28 @@ Assert("停顿告警5秒节流", !stallWatch.Observe(9999, true) && stallWatch.O
 Assert("退出停顿重置计时", !stallWatch.Observe(10001, false) && !stallWatch.Observe(20000, true));
 Assert("重进停顿重新等待4秒", !stallWatch.Observe(23999, true) && stallWatch.Observe(24000, true));
 Assert("停顿计时回退安全", !stallWatch.Observe(1, true) && !stallWatch.Observe(4000, true) && stallWatch.Observe(4001, true));
+var migrationRoot = Path.Combine(Path.GetTempPath(), "Displaced-Migration-" + Guid.NewGuid().ToString("N"));
+try
+{
+    var source = Path.Combine(migrationRoot, "legacy");
+    var destination = Path.Combine(migrationRoot, "current");
+    ConfigurationMigration.CopyMissingJson(source, destination);
+    Assert("旧配置不存在时不创建新目录", !Directory.Exists(destination));
+    Directory.CreateDirectory(source);
+    Directory.CreateDirectory(destination);
+    File.WriteAllText(Path.Combine(source, "VPR.json"), "{\"mode\":\"legacy\"}");
+    File.WriteAllText(Path.Combine(destination, "VPR.json"), "{\"mode\":\"current\"}");
+    File.WriteAllText(Path.Combine(source, "Common.json"), "{\"theme\":2}");
+    File.WriteAllText(Path.Combine(source, "ignored.dll"), "not a setting");
+    ConfigurationMigration.CopyMissingJson(source, destination);
+    Assert("已有新作者配置不覆盖", File.ReadAllText(Path.Combine(destination, "VPR.json")) == "{\"mode\":\"current\"}");
+    Assert("中断迁移后补齐缺少的主题设置", File.ReadAllText(Path.Combine(destination, "Common.json")) == "{\"theme\":2}");
+    Assert("配置迁移不携带旧程序集", !File.Exists(Path.Combine(destination, "ignored.dll")));
+    ConfigurationMigration.CopyMissingJson(source, destination);
+    Assert("重复迁移保持新配置与旧源文件", File.Exists(Path.Combine(source, "Common.json")) &&
+        File.ReadAllText(Path.Combine(destination, "VPR.json")) == "{\"mode\":\"current\"}");
+}
+finally { Directory.Delete(migrationRoot, recursive: true); }
 Console.WriteLine($"Checks: {checks}; Failures: {failures.Count}");
 foreach (var failure in failures) Console.WriteLine("FAIL " + failure);
 return failures.Count == 0 ? 0 : 1;

@@ -17,7 +17,7 @@ public static class ViperEngine
         }
         if (s.SkillDistance > 3 && !(UseAoe(s, o) && s.SkillDistance <= 5)) return Ranged(s, o);
 
-        // Reawaken breaks Vicewinder's combo. Finish the active family even if target count changes.
+        // Complete the active Vicewinder family before starting Reawaken in either mode.
         if (s.DreadCombo != 0)
         {
             var action = s.DreadCombo switch {
@@ -40,8 +40,13 @@ public static class ViperEngine
         var comboReserve = o.Mode == CombatMode.HighEnd && s.Has(Buffs.ReadyToReawaken) && s.Gauge >= 50
             ? o.DoubleBuffSeconds : o.SingleBuffSeconds;
         // Long resource spenders preserve the basic combo but still consume its 30-second timer.
-        if (basicPending && s.ComboRemaining > 0 && s.ComboRemaining <= comboReserve)
+        if (basicPending && s.ComboRemaining > 0 &&
+            (o.Mode == CombatMode.Daily || s.ComboRemaining <= comboReserve))
             return Basic(s, aoe);
+        if (o.Mode == CombatMode.Daily && ModePolicy.AllowsTargetBurst(o.Mode, s.TargetHpPercent) &&
+            o.Burst && o.Reawaken && (s.Gauge >= 50 || s.Has(Buffs.ReadyToReawaken)) &&
+            Choose(s, Skills.Reawaken, "日随：连招完成后优先祖灵降临") is { } dailyReawaken)
+            return dailyReawaken;
         if (o.Mode == CombatMode.Daily) return DailyGcd(s, o, aoe);
         var vice = aoe ? Skills.Vicepit : Skills.Vicewinder;
         var viceReady = o.Cooldowns && s.Learned(vice) && s.Charges.GetValueOrDefault(Skills.Vicewinder) >= 1;
@@ -152,10 +157,6 @@ public static class ViperEngine
             Choose(s, Skills.UncoiledFury, "日随：先消耗飞蛇之魂，避免资源溢出") is { } overflow) return overflow;
         if (!s.Has(Buffs.Swiftscaled)) return Basic(s, aoe);
 
-        // Daily mode spends available resources without reserving for raid buffs or double Reawaken.
-        if (allowBurst && o.Burst && o.Reawaken && (s.Gauge >= 50 || s.Has(Buffs.ReadyToReawaken)) &&
-            s.Buff(Buffs.HuntersInstinct) >= o.SingleBuffSeconds && s.Buff(Buffs.Swiftscaled) >= o.SingleBuffSeconds &&
-            Choose(s, Skills.Reawaken, "日随：祖灵资源就绪即用") is { } reawaken) return reawaken;
         if (viceReady && Choose(s, vice, "日随：强碎灵蛇／强碎灵蟒充能就绪即用") is { } coil) return coil;
         if (s.Coils > 0 && Choose(s, Skills.UncoiledFury, "日随：消耗可用飞蛇之魂，不保留远离资源") is { } fury) return fury;
         return Basic(s, aoe);
