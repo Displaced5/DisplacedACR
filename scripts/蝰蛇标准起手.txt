@@ -1,0 +1,109 @@
+﻿using System;
+using System.Collections.Generic;
+using PromeRotation.Core;
+using PromeRotation.Data;
+using PromeRotation.Extensions;
+using PromeRotation.Helpers;
+using PromeRotation.Managers;
+using PromeRotation.Rotation;
+using PRCore = PromeRotation.Core.Core;
+
+// 独立导入版：ViperACR 当前加载时，蛇行交由 ACR 默认功能处理，避免重复。
+// 100级标准起手，17个GCD；GCD等待宿主校验。
+public sealed class VPR_100_Standard : IOpener
+{
+    public string OpenerName => "蝰蛇标准起手（500ms蛇行）";
+    public bool UsePotion { get; set; } = false; // 需要用药时改为 true
+    public bool UseLongArms { get; set; } = true; // 仅其他ACR下的独立起手；Displaced使用UI开关
+    public bool UnlimitedDashDistance { get; set; } = false;
+
+    public List<PAction> InCombatSequence
+    {
+        get
+        {
+            // ViperACR owns the phased opener so both Vicewinders read live position.
+            var rotation = RotationManager.GetCurrentRotation();
+            if (rotation?.GetType().FullName == "ViperACR.Host.ViperRotation")
+                return rotation.GetOpener()?.InCombatSequence ?? new List<PAction>();
+            var result = new List<PAction>();
+            result.Add(new PAction(34620, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 1G：强碎灵蛇
+            result.Add(new PAction(34647, ActionType.OffGcd, ActionTargetType.Self)); // 蛇灵气
+            // 图片中的爆发药位置；默认关闭，使用宿主推荐药品。
+            var potion = UsePotion ? GameData.GetBestPotionId() : 0;
+            if (potion != 0 && !ActionHelper.IsItemOnCooldown(potion))
+                result.Add(new PAction(potion, ActionType.Item, ActionTargetType.Self));
+            result.Add(new PAction(34622, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 2G：疾速盘蛇
+            result.Add(new PAction(34637, ActionType.OffGcd, ActionTargetType.Target)); // 双牙乱击
+            result.Add(new PAction(34636, ActionType.OffGcd, ActionTargetType.Target)); // 双牙连击
+            result.Add(new PAction(34621, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 3G：猛袭盘蛇
+            result.Add(new PAction(34636, ActionType.OffGcd, ActionTargetType.Target)); // 双牙连击
+            result.Add(new PAction(34637, ActionType.OffGcd, ActionTargetType.Target)); // 双牙乱击
+            result.Add(new PAction(34620, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 4G：强碎灵蛇
+            result.Add(new PAction(34621, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 5G：猛袭盘蛇
+            result.Add(new PAction(34636, ActionType.OffGcd, ActionTargetType.Target)); // 双牙连击
+            result.Add(new PAction(34637, ActionType.OffGcd, ActionTargetType.Target)); // 双牙乱击
+            result.Add(new PAction(34622, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 6G：疾速盘蛇
+            result.Add(new PAction(34637, ActionType.OffGcd, ActionTargetType.Target)); // 双牙乱击
+            result.Add(new PAction(34636, ActionType.OffGcd, ActionTargetType.Target)); // 双牙连击
+            result.Add(new PAction(34626, ActionType.Gcd, ActionTargetType.Self) { RequiresVerification = true }); // 7G：祖灵降临
+            result.Add(new PAction(34627, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 8G：祖灵之牙一式
+            result.Add(new PAction(34640, ActionType.OffGcd, ActionTargetType.Target)); // 祖灵之蛇一式
+            result.Add(new PAction(34628, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 9G：祖灵之牙二式
+            result.Add(new PAction(34641, ActionType.OffGcd, ActionTargetType.Target)); // 祖灵之蛇二式
+            result.Add(new PAction(34629, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 10G：祖灵之牙三式
+            result.Add(new PAction(34642, ActionType.OffGcd, ActionTargetType.Target)); // 祖灵之蛇三式
+            result.Add(new PAction(34630, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 11G：祖灵之牙四式
+            result.Add(new PAction(34643, ActionType.OffGcd, ActionTargetType.Target)); // 祖灵之蛇四式
+            result.Add(new PAction(34631, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 12G：祖灵大蛇牙
+            result.Add(new PAction(34633, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 13G：飞蛇之尾
+            result.Add(new PAction(34644, ActionType.OffGcd, ActionTargetType.Target)); // 飞蛇连尾击
+            result.Add(new PAction(34645, ActionType.OffGcd, ActionTargetType.Target)); // 飞蛇乱尾击
+            result.Add(new PAction(34633, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 14G：飞蛇之尾
+            result.Add(new PAction(34644, ActionType.OffGcd, ActionTargetType.Target)); // 飞蛇连尾击
+            result.Add(new PAction(34645, ActionType.OffGcd, ActionTargetType.Target)); // 飞蛇乱尾击
+            result.Add(new PAction(34607, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 15G：穿裂尖齿
+            result.Add(new PAction(34609, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 16G：疾速利齿
+            result.Add(new PAction(34613, ActionType.Gcd, ActionTargetType.Target) { RequiresVerification = true }); // 17G：背裂獠齿
+            result.Add(new PAction(34634, ActionType.OffGcd, ActionTargetType.Target)); // 蛇尾击
+            foreach (var action in result) action.ExecutionGuard = () => WithinAttackRange(action.ActionId);
+            return result;
+        }
+    }
+
+    private bool WithinAttackRange(uint actionId)
+    {
+        var me = PRCore.Me;
+        var target = PRCore.Target;
+        if (me == null || me.IsDead || target == null || target.IsDead || !target.IsTargetable) return false;
+        var distance = Math.Max(0, System.Numerics.Vector2.Distance(
+            new(me.Position.X, me.Position.Z), new(target.Position.X, target.Position.Z)) - target.HitboxRadius);
+        var nativeRange = actionId is 34647 || actionId < 10000 ? 0
+            : actionId == 34646 ? 20
+            : actionId is 34632 or 34633 or 34644 or 34645 ? 20
+            : actionId is 34626 or >= 34634 and <= 34643 ? 5 : 3;
+        return float.IsFinite(distance) && (actionId == 34646 && UnlimitedDashDistance ||
+            nativeRange == 0 || distance <= nativeRange + (UseLongArms ? 3 : 0));
+    }
+
+    public void InitializeCountdown(CountDownHandler countdownHandler)
+    {
+        // 倒计时剩余500ms：蛇行。使用当前目标；技能本身无伤害。
+        countdownHandler.AddAction(500, () =>
+        {
+            var me = PRCore.Me;
+            var target = PRCore.Target;
+            var remaining = GameData.GetCountdown();
+            return RotationManager.GetCurrentRotation()?.GetType().FullName != "ViperACR.Host.ViperRotation" &&
+                PromeSettings.Instance.EnableAcr == AcrState.On && remaining > 0 && remaining <= 0.5f &&
+                me != null && !me.IsDead && me.ClassJob.RowId == 41 && me.Level >= 40 &&
+                !GameData.IsInCombat() && !GameData.IsInPvPArea() && !GameData.IsPlayerOccupied() &&
+                target != null && !target.IsDead && target.IsTargetable && target.CanUseAttackActionOn() &&
+                !TargetHelper.TargetHasInvincibilityStatus(target) &&
+                WithinAttackRange(34646) &&
+                34646u.IsActionAvailableByLevelAndQuest() && 34646u.GetActionCharges() > 0 &&
+                ActionHelper.IsReady(34646) && ActionHelper.CanCast(34646, target)
+                ? new PAction(34646, ActionType.OffGcd, ActionTargetType.Target) { NetworkTid = target.EntityId }
+                : null!;
+        });
+    }
+}

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ViperOpener.ScriptCheck</AssemblyName>
+    <Deterministic>true</Deterministic>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <DalamudDir Condition="'$(DalamudDir)' == ''">$(APPDATA)\XIVLauncherCN\addon\Hooks\26-10-21-01</DalamudDir>
+    <PromeDir Condition="'$(PromeDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\PromeRotation\1.5.10.4</PromeDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../scripts/蝰蛇标准起手.txt" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseInstalledHost)' != 'true'">
+    <PackageReference Include="PromeRotation.SDK.CNGL" Version="$(PromeSdkVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseInstalledHost)' == 'true'">
+    <Reference Include="PromeRotation" HintPath="$(PromeDir)\PromeRotation.dll" Private="false" />
+    <Reference Include="Dalamud" HintPath="$(DalamudDir)\Dalamud.dll" Private="false" />
+    <Reference Include="Lumina" HintPath="$(DalamudDir)\Lumina.dll" Private="false" />
+    <Reference Include="Lumina.Excel" HintPath="$(DalamudDir)\Lumina.Excel.dll" Private="false" />
+    <Reference Include="Dalamud.Bindings.ImGui" HintPath="$(DalamudDir)\Dalamud.Bindings.ImGui.dll" Private="false" />
+  </ItemGroup>
+</Project>

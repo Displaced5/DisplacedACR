@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.0.21</Version>
+    <PromeSdkVersion>0.1.0-preview.3</PromeSdkVersion>
+    <DalamudDir Condition="'$(DalamudDir)' == '' and '$(DALAMUD_HOME)' != ''">$(DALAMUD_HOME)</DalamudDir>
+    <PromeDir Condition="'$(PromeDir)' == '' and '$(PROME_HOME)' != ''">$(PROME_HOME)</PromeDir>
+    <DalamudDir Condition="'$(DalamudDir)' == ''">$(APPDATA)\XIVLauncherCN\addon\Hooks\26-10-21-01</DalamudDir>
+    <PromeDir Condition="'$(PromeDir)' == ''">$(APPDATA)\XIVLauncherCN\installedPlugins\PromeRotation\1.5.10.4</PromeDir>
+    <UseInstalledHost Condition="'$(UseInstalledHost)' == '' and Exists('$(PromeDir)\PromeRotation.dll') and Exists('$(DalamudDir)\Dalamud.dll')">true</UseInstalledHost>
+    <UseInstalledHost Condition="'$(UseInstalledHost)' == ''">false</UseInstalledHost>
+    <Deterministic>true</Deterministic>
+    <PathMap>$(MSBuildThisFileDirectory)=/_/Displaced/</PathMap>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+</Project>

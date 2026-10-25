@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <PropertyGroup><DalamudDir Condition="'$(DalamudDir)' == ''">$(APPDATA)\XIVLauncherCN\addon\Hooks\26-10-21-01</DalamudDir></PropertyGroup>
+  <ItemGroup Condition="'$(UseInstalledHost)' != 'true'">
+    <PackageReference Include="PromeRotation.SDK.CNGL" Version="$(PromeSdkVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(UseInstalledHost)' == 'true'">
+    <Reference Include="Lumina" HintPath="$(DalamudDir)\Lumina.dll" />
+    <Reference Include="Lumina.Excel" HintPath="$(DalamudDir)\Lumina.Excel.dll" />
+  </ItemGroup>
+</Project>
