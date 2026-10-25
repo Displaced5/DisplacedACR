@@ -3,10 +3,12 @@
 显示名：Displaced VPR。仓库名与发布包名：Displaced。
 加载身份 `Author`、程序集和安装目录均为 `ViperACR`，用于宿主包校验与配置兼容。
 
+源码仅保存在私有仓库 Displaced-source；公开 Displaced 仓库仅维护发布说明与安装包。不得将本工作区的 Git 历史推送至公开仓库。发布 ZIP 不附带 C# 源码、独立起手 TXT 或源码仓库链接。
+
 1. 同步修改 `Directory.Build.props` 和 `Core/ReleaseInfo.cs` 的版本号。
 2. 使用 `./build.ps1 -UseSdk` 构建；发布前指定实际宿主目录完成加载器验证。
 3. 审核 Git 暂存内容与 ZIP 文件。排除个人路径、私人记录、截图、凭据、配置、日志、反编译参考文件与 PDB。保留 ErosUI 许可证及修改说明。
-4. 提交源码并创建 `v<版本>` 标签。发布同一提交构建的 `Displaced.zip` 和 `repo.json`。
+4. 将源码提交至私有仓库。只在公开分发仓库维护说明和发布标签，上传 `Displaced.zip` 和 `repo.json`。
 5. 发布后通过公开下载链接重新下载资产，校验清单 SHA-256、版本、DLL 和 ZIP 根目录结构，再将同一 DLL 部署到本机。
 
 `repo.json` 的 `apiVersion` 为 15，职业为 VPR，`contentScope` 为 All。`referencePromeVersion` 取自实际编译使用的引用程序集，不冒充运行宿主版本。`sha256` 对应完整 ZIP。

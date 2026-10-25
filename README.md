@@ -25,12 +25,10 @@ https://github.com/Displaced5/Displaced/releases/latest/download/repo.json
 - 提供 QT、技能悬浮面板、循环设置、拓展功能与开发诊断。
 - 配置与诊断记录保存在本机，不包含在发布包中。
 
-## 构建
+## 分发
 
-使用 .NET 10 SDK 与 PowerShell 7。运行 `./build.ps1 -UseSdk` 使用公开 SDK 构建并生成 `dist/Displaced.zip` 与 `dist/repo.json`。实际宿主路径可通过 `-DalamudDir` 和 `-PromeDir` 指定，以运行加载器校验；传入 `-Install` 时备份并更新本机 ACR。
-
-主工程也支持通过 `dotnet build ViperACR.csproj -c Release -p:UseInstalledHost=false` 使用公开的 PromeRotation.SDK.CNGL 包编译。
+GitHub 公开仓库仅提供编译后的安装包、订阅清单、使用说明与第三方许可证。Displaced VPR 的 ACR 源码不公开，发布包不附带独立起手脚本源码。
 
 UI 使用经过适配的 ErosUI；其 MIT 许可证见 `vendor/ErosUI/LICENSE`，发布包附带 `ErosUI-LICENSE.txt`。
 
-完整步骤见 [构建说明](docs/BUILD.md) 与 [发布约定](docs/RELEASE.md)。发布格式参考 [MirukuACR](https://github.com/MilkVio/MirukuACR)。
+发布格式参考 [MirukuACR](https://github.com/MilkVio/MirukuACR)。
