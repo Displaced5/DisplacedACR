@@ -52,7 +52,7 @@ New-Item -ItemType Directory -Path $package -Force | Out-Null
 foreach ($name in @('ViperACR.dll', 'ViperACR.deps.json')) {
     Copy-Item -LiteralPath (Join-Path $output $name) -Destination $package -Force
 }
-foreach ($name in @('README.md', 'THIRD_PARTY_NOTICES.md')) {
+foreach ($name in @('README.md', 'THIRD_PARTY_NOTICES.md', 'LICENSE')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $package -Force
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'vendor\ErosUI\LICENSE') -Destination (Join-Path $package 'ErosUI-LICENSE.txt') -Force
@@ -69,7 +69,7 @@ if ($hasHost) {
 }
 $dllHash = (Get-FileHash -LiteralPath (Join-Path $package 'ViperACR.dll') -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath (Join-Path $package 'SHA256.txt') -Value "$dllHash  ViperACR.dll" -Encoding utf8
-$releaseFiles = @('ViperACR.dll', 'ViperACR.deps.json', 'README.md', 'THIRD_PARTY_NOTICES.md', 'ErosUI-LICENSE.txt', 'ErosUI-NOTICE.md', 'SHA256.txt')
+$releaseFiles = @('ViperACR.dll', 'ViperACR.deps.json', 'README.md', 'THIRD_PARTY_NOTICES.md', 'LICENSE', 'ErosUI-LICENSE.txt', 'ErosUI-NOTICE.md', 'SHA256.txt')
 $archive = Join-Path $PSScriptRoot 'dist\Displaced.zip'
 Compress-Archive -LiteralPath ($releaseFiles | ForEach-Object { Join-Path $package $_ }) -DestinationPath $archive -Force
 $repository = $RepositoryUrl.TrimEnd('/')
@@ -83,6 +83,7 @@ $manifest = [ordered]@{
     referencePromeVersion = $referenceVersion
     downloadUrl = "$repository/releases/latest/download/Displaced.zip"
     sha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    sourceRepositoryUrl = $repository
 }
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $PSScriptRoot 'dist\repo.json') -Encoding utf8
 Write-Host "发布包：$archive；版本 $version；PR 引用 $referenceVersion"

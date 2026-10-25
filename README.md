@@ -25,9 +25,13 @@ https://github.com/Displaced5/Displaced/releases/latest/download/repo.json
 - 提供 QT、技能悬浮面板、循环设置、拓展功能与开发诊断。
 - 配置与诊断记录保存在本机，不包含在发布包中。
 
-## 分发
+## 源码与构建
 
-GitHub 公开仓库仅提供编译后的安装包、订阅清单、使用说明与第三方许可证。Displaced VPR 的 ACR 源码不公开，发布包不附带独立起手脚本源码。
+Displaced VPR 在本仓库公开源码，采用 [MIT 许可证](LICENSE)。源码包含循环、UI 适配、独立起手脚本与通用回归测试。私人配置、诊断日志、游戏数据及宿主 DLL 不纳入仓库。
+
+使用 .NET 10 SDK 和 PowerShell 7 执行 `./build.ps1 -UseSdk`，可通过公开 SDK 构建 `dist/Displaced.zip` 与 `dist/repo.json`。提供 `-DalamudDir` 和 `-PromeDir` 可使用实际宿主校验，加 `-Install` 会备份并更新本机安装。详见 [构建说明](docs/BUILD.md) 与 [发布约定](docs/RELEASE.md)。
+
+离线检查与包加载验证不等于游戏内实战验证。
 
 UI 使用经过适配的 ErosUI；其 MIT 许可证见 `vendor/ErosUI/LICENSE`，发布包附带 `ErosUI-LICENSE.txt`。
 
