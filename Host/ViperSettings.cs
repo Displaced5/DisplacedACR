@@ -3,7 +3,7 @@ using ViperACR.Core;
 
 namespace ViperACR.Host;
 
-public enum OpenerMode { Standard, Dynamic }
+public enum OpenerMode { Standard = 0, Dynamic = 1, Tea80 = 2, Dsr90 = 3, Fru100 = 4 }
 
 public sealed class ViperSettings
 {
@@ -28,7 +28,7 @@ public sealed class ViperSettings
         {
             var result = File.Exists(FilePath) ? JsonSerializer.Deserialize<ViperSettings>(File.ReadAllText(FilePath)) ?? new() : new();
             result.AoeThreshold = Math.Clamp(result.AoeThreshold, 2, 8);
-            if (!Enum.IsDefined(result.Opener)) result.Opener = OpenerMode.Standard;
+            result.Opener = OpenerSelection.FromIndex(OpenerSelection.ToIndex(result.Opener));
             result.ReserveCoils = Math.Clamp(result.ReserveCoils, 0, 2);
             result.BurstReserveSeconds = Math.Clamp(result.BurstReserveSeconds, 15, 60);
             result.WeaveSafetySeconds = Math.Clamp(result.WeaveSafetySeconds, 0.65f, 1.2f);

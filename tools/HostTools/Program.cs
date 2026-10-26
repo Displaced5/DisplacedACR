@@ -289,7 +289,132 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                 }
             }
             Console.WriteLine("Phased IOpener: 17 verified GCDs, live flank/rear choice at BOTH Vicewinders, paired bites, optional potion, NO True North, first-hit resume: PASS (16 variants).");
+            var teaType = assembly.GetType("ViperACR.Host.ViperTeaOpener", true)!;
+            var registeredOpeners = (IReadOnlyDictionary<string, Type>)rotationType.GetProperty("Openers")!.GetValue(null)!;
+            if (!registeredOpeners.TryGetValue("80级绝亚起手", out var teaRegistered) || teaRegistered != teaType ||
+                !pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(teaType))
+                throw new InvalidOperationException("Missing level-80 TEA opener registration");
+            uint[] teaExpected = [34607,34609,34620,34621,34636,34637,34622,34637,34636,
+                34612,34634,34606,34608,34620,34622,34637,34636,34621,34636,34637];
+            foreach (var skipFirst in new[] { false, true })
+            foreach (var potion in new uint[] { 0, 999999 })
+            {
+                var tea = Activator.CreateInstance(teaType, skipFirst, potion)!;
+                var teaSteps = ((System.Collections.IEnumerable)teaType.GetProperty("InCombatSequence")!.GetValue(tea)!).Cast<object>().ToArray();
+                var ids = teaExpected.Skip(skipFirst ? 1 : 0).ToList();
+                if (potion != 0) ids.Insert(skipFirst ? 1 : 2, potion);
+                uint TeaId(object step) => (uint)step.GetType().GetField("ActionId")!.GetValue(step)!;
+                if (!teaSteps.Select(TeaId).SequenceEqual(ids)) throw new InvalidOperationException("TEA opener sequence mismatch");
+                var gcdCount = 0;
+                foreach (var step in teaSteps)
+                {
+                    var t = step.GetType();
+                    var kind = t.GetField("Type")!.GetValue(step)!.ToString();
+                    if (kind == "Gcd") gcdCount++;
+                    if ((bool)t.GetProperty("RequiresVerification")!.GetValue(step)! != (kind == "Gcd") ||
+                        t.GetProperty("ExecutionGuard")!.GetValue(step) == null ||
+                        t.GetField("Target")!.GetValue(step)!.ToString() != (TeaId(step) == potion ? "Self" : "Target") ||
+                        (TeaId(step) == potion && kind != "Item"))
+                        throw new InvalidOperationException("TEA opener action contract mismatch");
+                }
+                if (gcdCount != (skipFirst ? 10 : 11)) throw new InvalidOperationException("TEA GCD count mismatch");
+            }
+            Console.WriteLine("Level-80 TEA IOpener: 11 verified GCDs, fixed coils/bites, Hindsting, potion after GCD2 and first-hit resume: PASS (4 variants).");
+            var teaSettings = JsonSerializer.Deserialize("{\"Opener\":2}", settings.GetType())!;
+            var restoredTeaSettings = JsonSerializer.Deserialize(JsonSerializer.Serialize(teaSettings, settings.GetType()), settings.GetType())!;
+            if (teaSettings.GetType().GetProperty("Opener")!.GetValue(teaSettings)!.ToString() != "Tea80" ||
+                restoredTeaSettings.GetType().GetProperty("Opener")!.GetValue(restoredTeaSettings)!.ToString() != "Tea80")
+                throw new InvalidOperationException("TEA opener configuration compatibility failed");
             Console.WriteLine("QT names, removed countdown QT and IRotationEventHandler countdown/reset callbacks passed.");
+            var dsrType = assembly.GetType("ViperACR.Host.ViperDsrOpener", true)!;
+            if (!registeredOpeners.TryGetValue("90级绝龙诗起手", out var dsrRegistered) || dsrRegistered != dsrType ||
+                !pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(dsrType) ||
+                Activator.CreateInstance(dsrType) == null)
+                throw new InvalidOperationException("Missing level-90 DSR opener registration/default constructor");
+            uint[] dsrExpected = [34607,34647,34609,34620,7546,34621,34636,34637,34622,34637,34636,
+                34626,34627,34628,34629,34630,34620,34621,34636,34637,34622,34637,34636,34613,34634,34633];
+            foreach (var skipFirst in new[] { false, true })
+            foreach (var potion in new uint[] { 0, 999999 })
+            foreach (var trueNorth in new[] { false, true })
+            {
+                var dsr = Activator.CreateInstance(dsrType, skipFirst, potion, trueNorth)!;
+                var dsrSteps = ((System.Collections.IEnumerable)dsrType.GetProperty("InCombatSequence")!.GetValue(dsr)!).Cast<object>().ToArray();
+                var ids = dsrExpected.Skip(skipFirst ? 1 : 0).Where(id => trueNorth || id != 7546).ToList();
+                if (potion != 0) ids.Insert(skipFirst ? 2 : 3, potion);
+                uint DsrId(object step) => (uint)step.GetType().GetField("ActionId")!.GetValue(step)!;
+                if (!dsrSteps.Select(DsrId).SequenceEqual(ids)) throw new InvalidOperationException("DSR opener sequence mismatch");
+                var gcdCount = 0;
+                foreach (var step in dsrSteps)
+                {
+                    var t = step.GetType();
+                    var id = DsrId(step);
+                    var kind = t.GetField("Type")!.GetValue(step)!.ToString();
+                    var expectedKind = id == potion ? "Item" : id is 34647 or 7546 or 34634 or 34636 or 34637 ? "OffGcd" : "Gcd";
+                    var self = id == potion || id is 34647 or 34626 or 7546;
+                    if (kind == "Gcd") gcdCount++;
+                    if (kind != expectedKind ||
+                        (bool)t.GetProperty("RequiresVerification")!.GetValue(step)! != (kind == "Gcd") ||
+                        t.GetProperty("ExecutionGuard")!.GetValue(step) == null ||
+                        t.GetField("Target")!.GetValue(step)!.ToString() != (self ? "Self" : "Target"))
+                        throw new InvalidOperationException("DSR opener action contract mismatch");
+                }
+                if (gcdCount != (skipFirst ? 14 : 15)) throw new InvalidOperationException("DSR GCD count mismatch");
+            }
+            var dsrSettings = JsonSerializer.Deserialize("{\"Opener\":3}", settings.GetType())!;
+            var restoredDsrSettings = JsonSerializer.Deserialize(JsonSerializer.Serialize(dsrSettings, settings.GetType()), settings.GetType())!;
+            if (dsrSettings.GetType().GetProperty("Opener")!.GetValue(dsrSettings)!.ToString() != "Dsr90" ||
+                restoredDsrSettings.GetType().GetProperty("Opener")!.GetValue(restoredDsrSettings)!.ToString() != "Dsr90")
+                throw new InvalidOperationException("DSR opener configuration compatibility failed");
+            Console.WriteLine("Level-90 DSR IOpener: 15 verified GCDs, fixed coils/bites, four Generations, correct self targets, potion/True North options, first-hit resume: PASS (8 variants).");
+            var fruType = assembly.GetType("ViperACR.Host.ViperFruOpener", true)!;
+            if (!registeredOpeners.TryGetValue("100级绝妖星起手", out var fruRegistered) || fruRegistered != fruType ||
+                !pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(fruType) ||
+                Activator.CreateInstance(fruType) == null)
+                throw new InvalidOperationException("Missing level-100 FRU opener registration/default constructor");
+            uint[] fruExpected = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
+                34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
+            foreach (var skipFirst in new[] { false, true })
+            {
+                var fru = Activator.CreateInstance(fruType, new object[] { skipFirst })!;
+                var fruSteps = ((System.Collections.IEnumerable)fruType.GetProperty("InCombatSequence")!.GetValue(fru)!).Cast<object>().ToArray();
+                uint FruId(object step) => (uint)step.GetType().GetField("ActionId")!.GetValue(step)!;
+                if (!fruSteps.Select(FruId).SequenceEqual(fruExpected.Skip(skipFirst ? 1 : 0)))
+                    throw new InvalidOperationException("FRU opener sequence mismatch");
+                var gcdCount = 0;
+                foreach (var step in fruSteps)
+                {
+                    var t = step.GetType();
+                    var id = FruId(step);
+                    var kind = t.GetField("Type")!.GetValue(step)!.ToString();
+                    var expectedKind = id is 34647 or 34634 or 34636 or 34637 or >= 34640 and <= 34643 ? "OffGcd" : "Gcd";
+                    if (kind == "Gcd") gcdCount++;
+                    if (kind != expectedKind ||
+                        (bool)t.GetProperty("RequiresVerification")!.GetValue(step)! != (kind == "Gcd") ||
+                        t.GetProperty("ExecutionGuard")!.GetValue(step) == null ||
+                        t.GetField("Target")!.GetValue(step)!.ToString() != (id is 34647 or 34626 ? "Self" : "Target"))
+                        throw new InvalidOperationException("FRU opener action contract mismatch");
+                }
+                if (gcdCount != (skipFirst ? 11 : 12)) throw new InvalidOperationException("FRU GCD count mismatch");
+            }
+            var selection = assembly.GetType("ViperACR.Host.OpenerSelection", true)!;
+            var labels = (string[])selection.GetField("Labels")!.GetValue(null)!;
+            if (!labels.SequenceEqual(new[] { "100级标准起手", "100级绝妖星起手", "90级绝龙诗起手", "80级绝亚起手" }) ||
+                !registeredOpeners.Values.Select(t => t.Name).SequenceEqual(new[] { "ViperStandardOpener", "ViperFruOpener", "ViperDsrOpener", "ViperTeaOpener" }))
+                throw new InvalidOperationException("Opener display/registration order mismatch");
+            foreach (var (saved, index, mode) in new[] { (0, 0, "Standard"), (4, 1, "Fru100"), (3, 2, "Dsr90"), (2, 3, "Tea80"), (1, 0, "Standard"), (99, 0, "Standard") })
+            {
+                var savedSettings = JsonSerializer.Deserialize("{\"Opener\":" + saved + "}", settings.GetType())!;
+                var oldMode = savedSettings.GetType().GetProperty("Opener")!.GetValue(savedSettings)!;
+                var actualIndex = (int)selection.GetMethod("ToIndex")!.Invoke(null, [oldMode])!;
+                var actualMode = selection.GetMethod("FromIndex")!.Invoke(null, [actualIndex])!;
+                savedSettings.GetType().GetProperty("Opener")!.SetValue(savedSettings, actualMode);
+                var restored = JsonSerializer.Deserialize(JsonSerializer.Serialize(savedSettings, settings.GetType()), settings.GetType())!;
+                if (actualIndex != index || actualMode.ToString() != mode ||
+                    restored.GetType().GetProperty("Opener")!.GetValue(restored)!.ToString() != mode)
+                    throw new InvalidOperationException("Opener sort changed persisted choice / fallback failed");
+            }
+            Console.WriteLine("Level-100 FRU IOpener: 12 verified GCDs, fixed coils/bites, paired Legacies, no potion/True North, first-hit resume: PASS (2 variants).");
+            Console.WriteLine("Four opener display/registration order and persisted selection compatibility/fallback: PASS (6 cases).");
             registry.GetMethod("ValidateExternalPackage", privateStatic)!.Invoke(null, [Path.GetFileName(folder), candidates, false]);
             Console.WriteLine($"PASS: PR {pr.GetName().Version} accepted package {Path.GetFileName(folder)}; rotations={candidates.Count}");
             foreach (var candidate in candidates)

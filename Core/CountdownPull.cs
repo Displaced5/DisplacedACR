@@ -10,13 +10,13 @@ public sealed class CountdownPull
 
     public void Reset() { _previous = 0; _submitted = false; }
 
-    public bool TrySubmit(float remaining, bool eligible)
+    public bool TrySubmit(float remaining, bool eligible, float triggerSeconds = TriggerSeconds)
     {
         if (!float.IsFinite(remaining) || remaining <= 0) { Reset(); return false; }
         // A timer restarted without a zero frame is a new countdown as well.
         if (remaining > _previous + 0.5f) _submitted = false;
         _previous = remaining;
-        if (_submitted || remaining > TriggerSeconds || !eligible) return false;
+        if (_submitted || remaining > triggerSeconds || !eligible) return false;
         _submitted = true;
         return true;
     }

@@ -508,6 +508,61 @@ foreach (var secondFacing in new[] { Facing.Flank, Facing.Rear })
     Assert("标准起手阶段完成不再重复", plan.Complete && plan.Next(State()) == null);
 }
 var invalidPlan = new StandardOpenerPlan();
+uint[] fruActions = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
+    34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
+Assert("绝妖星起手逐项固定顺序", FruOpener.Steps.Select(x => x.ActionId).SequenceEqual(fruActions));
+Assert("绝妖星起手12GCD", FruOpener.Steps.Count(x => !Skills.IsOffGcd(x.ActionId)) == 12);
+Assert("绝妖星起手无药和真北", FruOpener.Steps.All(x => !x.Potion && x.ActionId != Skills.TrueNorth));
+Assert("绝妖星起手所有技能100级可用", FruOpener.Steps.All(x => Skills.Level(x.ActionId) <= 100));
+Assert("绝妖星起手仅一次强碎灵蛇", FruOpener.Steps.Count(x => x.ActionId == Skills.Vicewinder) == 1);
+Assert("绝妖星起手第一GCD后蛇灵气", FruOpener.Steps[0].ActionId == Skills.ReavingFangs && FruOpener.Steps[1].ActionId == Skills.SerpentsIre);
+Assert("绝妖星起手四组祖灵配对", FruOpener.Steps.Skip(11).Take(8).Select(x => x.ActionId)
+    .SequenceEqual(new uint[] {34627,34640,34628,34641,34629,34642,34630,34643}));
+Assert("绝妖星起手大蛇牙背裂蛇尾收尾", FruOpener.Steps.TakeLast(3).Select(x => x.ActionId).SequenceEqual(new uint[] {34631,34613,34634}));
+Assert("绝妖星起手仅100级高难", FruOpener.CanStart(100, options) && !FruOpener.CanStart(99, options) &&
+    !FruOpener.CanStart(90, options) && !FruOpener.CanStart(100, daily));
+Assert("绝妖星起手尊重四项爆发QT", !FruOpener.CanStart(100, options with { Burst = false }) &&
+    !FruOpener.CanStart(100, options with { Cooldowns = false }) && !FruOpener.CanStart(100, options with { Reawaken = false }) &&
+    !FruOpener.CanStart(100, options with { SerpentsIre = false }));
+uint[] dsrActions = [34607,34647,34609,0,34620,7546,34621,34636,34637,34622,34637,34636,
+    34626,34627,34628,34629,34630,34620,34621,34636,34637,34622,34637,34636,34613,34634,34633];
+Assert("绝龙诗起手逐项固定顺序", DsrOpener.Steps.Select(x => x.ActionId).SequenceEqual(dsrActions));
+var dsrGcds = DsrOpener.Steps.Where(x => !x.Potion && !Skills.IsOffGcd(x.ActionId)).Select(x => x.ActionId).ToArray();
+Assert("绝龙诗起手15GCD", dsrGcds.Length == 15);
+Assert("绝龙诗起手祖灵四式后直接强碎灵蛇", dsrGcds.Skip(5).Take(6).SequenceEqual(new uint[] {34626,34627,34628,34629,34630,34620}));
+Assert("绝龙诗起手所有技能90级可用", DsrOpener.Steps.Where(x => !x.Potion).All(x => Skills.Level(x.ActionId) <= 90));
+Assert("绝龙诗起手药在第二GCD后", DsrOpener.Steps[3].Potion && DsrOpener.Steps[2].ActionId == Skills.SwiftskinsSting);
+Assert("绝龙诗起手蛇灵气在第一GCD后", DsrOpener.Steps[1].ActionId == Skills.SerpentsIre);
+Assert("绝龙诗起手真北在第三GCD后", DsrOpener.Steps[4].ActionId == Skills.Vicewinder && DsrOpener.Steps[5].ActionId == Skills.TrueNorth);
+Assert("绝龙诗起手背裂蛇尾飞蛇收尾", DsrOpener.Steps.TakeLast(3).Select(x => x.ActionId).SequenceEqual(new uint[] {34613,34634,34633}));
+Assert("绝龙诗起手仅90级高难", DsrOpener.CanStart(90, options) && !DsrOpener.CanStart(89, options) &&
+    !DsrOpener.CanStart(91, options) && !DsrOpener.CanStart(90, daily));
+Assert("绝龙诗起手尊重四项爆发QT", !DsrOpener.CanStart(90, options with { Burst = false }) &&
+    !DsrOpener.CanStart(90, options with { Cooldowns = false }) && !DsrOpener.CanStart(90, options with { Reawaken = false }) &&
+    !DsrOpener.CanStart(90, options with { SerpentsIre = false }));
+uint[] teaActions = [34607,34609,0,34620,34621,34636,34637,34622,34637,34636,
+    34612,34634,34606,34608,34620,34622,34637,34636,34621,34636,34637];
+Assert("绝亚起手逐项固定顺序", TeaOpener.Steps.Select(x => x.ActionId).SequenceEqual(teaActions));
+Assert("绝亚起手11GCD", TeaOpener.Steps.Count(x => !x.Potion && !Skills.IsOffGcd(x.ActionId)) == 11);
+Assert("绝亚起手药在第二GCD后", TeaOpener.Steps[2].Potion && TeaOpener.Steps[1].ActionId == Skills.SwiftskinsSting);
+Assert("绝亚起手第六GCD背击而非背裂", TeaOpener.Steps.Where(x => !x.Potion && !Skills.IsOffGcd(x.ActionId)).ElementAt(5).ActionId == Skills.HindstingStrike);
+Assert("绝亚起手所有技能80级可用", TeaOpener.Steps.Where(x => !x.Potion).All(x => Skills.Level(x.ActionId) <= 80));
+Assert("绝亚起手不需要蛇灵气与祖灵QT", TeaOpener.CanStart(80, options with { Reawaken = false, SerpentsIre = false }));
+Assert("绝亚起手仅80级高难", TeaOpener.CanStart(80, options) && !TeaOpener.CanStart(79, options) &&
+    !TeaOpener.CanStart(81, options) && !TeaOpener.CanStart(80, daily));
+Assert("绝亚起手尊重爆发与蛇剑QT", !TeaOpener.CanStart(80, options with { Burst = false }) &&
+    !TeaOpener.CanStart(80, options with { Cooldowns = false }));
+var teaCountdown = new CountdownPull();
+Assert("绝亚真北倒数4秒前不提交", !teaCountdown.TrySubmit(4.1f, true, TeaOpener.TrueNorthSeconds));
+Assert("绝亚真北倒数4秒提交", teaCountdown.TrySubmit(4, true, TeaOpener.TrueNorthSeconds));
+Assert("绝亚真北一次倒计时仅一次", !teaCountdown.TrySubmit(3.9f, true, TeaOpener.TrueNorthSeconds));
+Assert("绝亚真北取消后重新触发", !teaCountdown.TrySubmit(0, true, TeaOpener.TrueNorthSeconds) &&
+    teaCountdown.TrySubmit(4, true, TeaOpener.TrueNorthSeconds));
+Assert("绝亚真北重开倒计时复位", !teaCountdown.TrySubmit(10, true, TeaOpener.TrueNorthSeconds) &&
+    teaCountdown.TrySubmit(4, true, TeaOpener.TrueNorthSeconds));
+teaCountdown.Reset();
+Assert("绝亚真北条件不满足不提交", !teaCountdown.TrySubmit(4, false, TeaOpener.TrueNorthSeconds));
+Assert("绝亚真北锁结束后窗口内可重试", teaCountdown.TrySubmit(3.9f, true, TeaOpener.TrueNorthSeconds));
 foreach (var facing in new[] { Facing.Flank, Facing.Rear })
 {
     var preparedPlan = new StandardOpenerPlan();
