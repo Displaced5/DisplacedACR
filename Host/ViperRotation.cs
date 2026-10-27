@@ -56,7 +56,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         LegacyConfiguration.Migrate();
         ErosUIFramework.Configure("VPR", "蝰蛇剑士", QtList, _ => false, (_, _) => true,
             key => QtList.GetValueOrDefault(key), new Dictionary<string, (string key, bool invert)[]>(),
-            ["蛇行", "真北", "内丹", "浴血", "牵制", "冲刺", "极限技"],
+            ["蛇行", "真北", "内丹", "浴血", "牵制", "冲刺", "极限技", ViperPotion.Name],
             b => {
                 b.Fixed("蛇行", Skills.Slither, ActionType.OffGcd, ActionTargetType.Target,
                     () => IsTargetWithinAttackRange(actionId: Skills.Slither));
@@ -66,6 +66,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
                 b.Fixed("牵制", 7549, ActionType.OffGcd, ActionTargetType.Target);
                 b.Fixed("冲刺", 3, ActionType.OffGcd, ActionTargetType.Self);
                 b.Execute("极限技", new ExecuteLogic(ViperLimitBreak.Queue), ViperLimitBreak.IconActionId);
+                ViperPotion.Register(b);
             }, author: ReleaseInfo.Author, drawRotationSettings: DrawRotationSettings, drawOpenerSettings: DrawOpenerSettings);
         _settings = ViperSettings.Load(out _error);
         _diagnostics = new ViperDiagnostics(_settings);

@@ -192,6 +192,37 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                     throw new InvalidOperationException("Limit break action/queue/target/guard contract failed");
             }
             Console.WriteLine("Manual limit break: dynamic action ID, LimitBreak queue type, target binding and guard contract: PASS (no game actions).");
+            var potionType = assembly.GetType("ViperACR.Host.ViperPotion", true)!;
+            var createPotion = potionType.GetMethod("CreateAction", BindingFlags.NonPublic | BindingFlags.Static)!;
+            if (createPotion.Invoke(null, [0u, 123u, Environment.TickCount64]) != null ||
+                createPotion.Invoke(null, [45996u, 0u, Environment.TickCount64]) != null)
+                throw new InvalidOperationException("Manual potion must reject missing item/player");
+            foreach (var itemId in new uint[] { 45996, 1045996 })
+            {
+                var action = createPotion.Invoke(null, [itemId, 123u, Environment.TickCount64 - 10000])!;
+                var actionType = action.GetType();
+                var guard = (Func<bool>)actionType.GetProperty("ExecutionGuard")!.GetValue(action)!;
+                if ((uint)actionType.GetField("ActionId")!.GetValue(action)! != itemId ||
+                    actionType.GetField("Type")!.GetValue(action)!.ToString() != "Item" ||
+                    actionType.GetField("Target")!.GetValue(action)!.ToString() != "Self" || guard())
+                    throw new InvalidOperationException("Manual potion NQ/HQ, item targeting or stale-request guard failed");
+            }
+            var builderType = assembly.GetType("ErosUI.ErosUIHotkeyBuilder", true)!;
+            var potionUiSettings = Activator.CreateInstance(modeSettingsType)!;
+            var potionBuilder = Activator.CreateInstance(builderType, potionUiSettings)!;
+            potionType.GetMethod("Register")!.Invoke(null, [potionBuilder]);
+            var potionEntries = ((System.Collections.IEnumerable)builderType.GetProperty("Entries")!.GetValue(potionBuilder)!).Cast<object>().ToArray();
+            if (potionEntries.Length != 1 ||
+                (string)potionEntries[0].GetType().GetField("Item1")!.GetValue(potionEntries[0])! != "爆发药" ||
+                (uint)potionEntries[0].GetType().GetField("Item3")!.GetValue(potionEntries[0])! != 20709u)
+                throw new InvalidOperationException("Manual potion hotkey label/item icon registration failed");
+            var hiddenPotion = (ISet<string>)modeSettingsType.GetField("HiddenHotkeys")!.GetValue(potionUiSettings)!;
+            hiddenPotion.Add("爆发药");
+            var hiddenPotionBuilder = Activator.CreateInstance(builderType, potionUiSettings)!;
+            potionType.GetMethod("Register")!.Invoke(null, [hiddenPotionBuilder]);
+            if (((System.Collections.IEnumerable)builderType.GetProperty("Entries")!.GetValue(hiddenPotionBuilder)!).Cast<object>().Any())
+                throw new InvalidOperationException("Manual potion hotkey must honor visibility settings");
+            Console.WriteLine("Manual potion: NQ/HQ item IDs, self target, expired request rejection, item icon and visibility registration: PASS (no game actions).");
             DiagnosticsValidation.Run(assembly, pr, settings);
             BasicAutomationValidation.Run(assembly, pr);
             var snapshotType = assembly.GetType("ViperACR.Core.Snapshot", true)!;
@@ -492,6 +523,14 @@ if (args.Length > 0 && args[0] == "--limit-break-data")
         PanicOnSheetChecksumMismatch = true, DefaultExcelLanguage = Language.ChineseSimplified });
     foreach (var action in lbData.Excel.GetSheet<Lumina.Excel.Sheets.Action>()!.Where(a => a.RowId is 200 or 201 or 34866))
         Console.WriteLine($"{action.RowId}: {action.Name.ExtractText()} icon={action.Icon} category={action.ActionCategory.RowId} job={action.ClassJob.RowId}");
+    return;
+}
+if (args.Length > 0 && args[0] == "--potion-data")
+{
+    using var potionData = new GameData(ClientDataPath(), new LuminaOptions {
+        PanicOnSheetChecksumMismatch = true, DefaultExcelLanguage = Language.ChineseSimplified });
+    foreach (var item in potionData.Excel.GetSheet<Item>()!.Where(i => i.RowId is 49235 or 45996 or 44163 or 39728 or 37841))
+        Console.WriteLine($"{item.RowId}: {item.Name.ExtractText()} icon={item.Icon}");
     return;
 }
 if (args.Length >= 2 && args[0] == "--export-viper-icons")
