@@ -5,8 +5,6 @@ public enum CombatMode { Daily, HighEnd }
 
 public static class ModePolicy
 {
-    public static bool UsesStandardOpener(CombatMode mode, bool standardSelected) =>
-        mode == CombatMode.HighEnd && standardSelected;
     public static bool AllowsTargetBurst(CombatMode mode, float targetHpPercent, int partySize) =>
         mode != CombatMode.Daily || partySize == 8 || targetHpPercent >= 20;
 }

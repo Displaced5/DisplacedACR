@@ -59,7 +59,7 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                     qts.ContainsKey("标准起手"))
                     throw new InvalidOperationException("QT names / removed countdown QT / standard opener default contract failed");
                 var openers = (IReadOnlyDictionary<string, Type>)type.GetProperty("Openers")!.GetValue(null)!;
-                if (!openers.TryGetValue("蝰蛇标准起手", out var registered) || registered.Name != "ViperStandardOpener")
+                if (!openers.TryGetValue("100级标准起手", out var registered) || registered.Name != "ViperStandardOpener")
                     throw new InvalidOperationException("Standard opener registration mismatch");
                 var lifecycle = pr.GetType("PromeRotation.Rotation.IRotationLifecycle", true)!;
                 if (!lifecycle.IsAssignableFrom(type)) throw new InvalidOperationException("UI lifecycle missing");
@@ -144,16 +144,10 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                     throw new InvalidOperationException("UI mode JSON persistence mismatch");
             }
             var modeType = assembly.GetType("ViperACR.Core.CombatMode", true)!;
-            var openerPolicy = assembly.GetType("ViperACR.Core.ModePolicy", true)!.GetMethod("UsesStandardOpener")!;
-            foreach (var highEnd in new[] { false, true })
-            foreach (var standardSelected in new[] { false, true })
-                if ((bool)openerPolicy.Invoke(null, [Enum.Parse(modeType, highEnd ? "HighEnd" : "Daily"), standardSelected])!
-                    != (highEnd && standardSelected))
-                    throw new InvalidOperationException("Mode/opener selection policy mismatch");
             if (modeSettingsType.GetMethod("SwitchMode") == null ||
                 assembly.GetType("ErosUI.ErosUISettingsUI", true)!.GetMethod("DrawModeSwitchRow") == null)
                 throw new InvalidOperationException("Missing shared ErosUI mode switch");
-            Console.WriteLine("Daily default, both modes JSON persistence and all four mode/opener policies: PASS.");
+            Console.WriteLine("Daily default and both modes JSON persistence: PASS.");
             var burstPolicy = assembly.GetType("ViperACR.Core.ModePolicy", true)!.GetMethod("AllowsTargetBurst")!;
             foreach (var highEnd in new[] { false, true })
             foreach (var partySize in new[] { 0, 4, 7, 8 })
@@ -262,21 +256,31 @@ if (args.Length >= 2 && args[0] == "--validate-package")
             if (countdownTicks != 1 || resetTicks != 2 || openerResets != 2 || battleUpdates != 1 || diagnosticsUpdates != 1)
                 throw new InvalidOperationException("Countdown / opener phase / reset wiring failed");
             var openerType = assembly.GetType("ViperACR.Host.ViperStandardOpener", true)!;
+            var registeredOpeners = (IReadOnlyDictionary<string, Type>)rotationType.GetProperty("Openers")!.GetValue(null)!;
             if (!pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(openerType))
                 throw new InvalidOperationException("IOpener contract mismatch");
-            uint[] expected = [34620,34647,34622,34637,34636,34621,34636,34637,34620,34621,34636,34637,
-                34622,34637,34636,34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,
-                34633,34644,34645,34633,34644,34645,34607,34609,34613,34634];
+            if (!registeredOpeners.TryGetValue("100级标准起手", out var standardRegistered) || standardRegistered != openerType ||
+                !pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(openerType) ||
+                Activator.CreateInstance(openerType) == null)
+                throw new InvalidOperationException("Missing level-100 standard opener registration/default constructor");
+            uint[] standardExpected = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
+                34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
+            var planMethod = openerType.GetMethod("NextPhase")!;
+            var facingType = assembly.GetType("ViperACR.Core.Facing", true)!;
             foreach (var skipFirst in new[] { false, true })
-            foreach (var potion in new uint[] { 0, 999999 })
-            foreach (var firstFlank in new[] { false, true })
-            foreach (var secondFlank in new[] { false, true })
+            foreach (var autoTrueNorth in new[] { false, true })
+            foreach (var firstWrong in new[] { false, true })
+            foreach (var secondWrong in new[] { false, true })
+            foreach (var finisherWrong in new[] { false, true })
             {
-                var opener = Activator.CreateInstance(openerType, skipFirst, potion)!;
+                var opener = Activator.CreateInstance(openerType, new object[] { skipFirst })!;
                 var steps = ((System.Collections.IEnumerable)openerType.GetProperty("InCombatSequence")!.GetValue(opener)!).Cast<object>().ToList();
-                var nextPhase = openerType.GetMethod("NextPhase")!;
-                var phaseNumber = 0;
-                foreach (var combo in new[] { 1, firstFlank ? 2 : 3, 0, 1, secondFlank ? 2 : 3, 0 })
+                var initial = standardExpected.Skip(skipFirst ? 1 : 0).Take(skipFirst ? 3 : 4);
+                if (!steps.Select(Id).SequenceEqual(initial)) throw new InvalidOperationException("Standard opener initial phase mismatch");
+                var phaseInputs = new[] { (Combo: 1, Wrong: firstWrong, Facing: "Flank"),
+                    (Combo: 2, Wrong: secondWrong, Facing: "Rear"), (Combo: 0, Wrong: false, Facing: "Flank"),
+                    (Combo: 0, Wrong: finisherWrong, Facing: "Rear") };
+                foreach (var (combo, wrong, correctFacing) in phaseInputs)
                 {
                     var phaseState = Activator.CreateInstance(snapshotType)!;
                     snapshotType.GetProperty("Active")!.SetValue(phaseState, true);
@@ -284,44 +288,38 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                     snapshotType.GetProperty("DreadCombo")!.SetValue(phaseState, combo);
                     snapshotType.GetProperty("BuffTimes")!.SetValue(phaseState, new Dictionary<uint, float> { [3668] = 35, [3669] = 35 });
                     snapshotType.GetProperty("NeedsPositional")!.SetValue(phaseState, true);
-                    var facing = assembly.GetType("ViperACR.Core.Facing", true)!;
-                    snapshotType.GetProperty("Facing")!.SetValue(phaseState,
-                        Enum.Parse(facing, (phaseNumber < 3 ? firstFlank : secondFlank) ? "Flank" : "Rear"));
-                    var phase = nextPhase.Invoke(opener, [phaseState]) as System.Collections.IEnumerable
-                        ?? throw new InvalidOperationException("Missing live opener phase");
+                    var facingName = wrong ? (correctFacing == "Flank" ? "Rear" : "Flank") : correctFacing;
+                    snapshotType.GetProperty("Facing")!.SetValue(phaseState, Enum.Parse(facingType, facingName));
+                    snapshotType.GetProperty("Charges")!.SetValue(phaseState, new Dictionary<uint, float> { [7546] = 2 });
+                    var phase = planMethod.Invoke(opener, [phaseState, autoTrueNorth]) as System.Collections.IEnumerable;
+                    if (phase == null) throw new InvalidOperationException("Missing live standard opener phase");
                     steps.AddRange(phase.Cast<object>());
-                    phaseNumber++;
                 }
-                uint Id(object a) => (uint)a.GetType().GetField("ActionId")!.GetValue(a)!;
-                var adaptive = expected.ToArray();
-                void CoilBlock(int index, bool hunter)
-                {
-                    adaptive[index] = hunter ? 34621u : 34622u;
-                    adaptive[index + 1] = hunter ? 34636u : 34637u;
-                    adaptive[index + 2] = hunter ? 34637u : 34636u;
-                }
-                CoilBlock(2, firstFlank); CoilBlock(5, !firstFlank);
-                CoilBlock(9, secondFlank); CoilBlock(12, !secondFlank);
-                var ids = adaptive.Skip(skipFirst ? 1 : 0).ToList();
-                if (potion != 0) ids.Insert(skipFirst ? 1 : 2, potion);
-                if (steps.Any(step => Id(step) == 7546)) throw new InvalidOperationException("True North must not occur in standard opener");
-                if (!steps.Select(Id).SequenceEqual(ids)) throw new InvalidOperationException("Opener sequence/options mismatch");
+                var ids = steps.Select(Id).ToList();
+                var insertFirstNorth = autoTrueNorth && firstWrong;
+                var insertSecondNorth = autoTrueNorth && secondWrong;
+                var expectedIds = standardExpected.Skip(skipFirst ? 1 : 0).ToList();
+                if (insertFirstNorth) expectedIds.Insert(skipFirst ? 3 : 4, 7546);
+                if (insertSecondNorth) expectedIds.Insert((skipFirst ? 6 : 7) + (insertFirstNorth ? 1 : 0), 7546);
+                if (autoTrueNorth && finisherWrong) expectedIds.Insert(expectedIds.Count - 2, 7546);
+                if (!ids.SequenceEqual(expectedIds)) throw new InvalidOperationException("Standard opener sequence/True North condition mismatch");
                 foreach (var step in steps)
                 {
                     var stepType = step.GetType();
+                    var id = Id(step);
                     var type = stepType.GetField("Type")!.GetValue(step)!.ToString();
                     var verified = (bool)stepType.GetProperty("RequiresVerification")!.GetValue(step)!;
                     if (stepType.GetProperty("ExecutionGuard")!.GetValue(step) == null)
                         throw new InvalidOperationException("Every opener action requires a live attack range guard");
                     if (verified != (type == "Gcd")) throw new InvalidOperationException("GCD verification mismatch");
-                    var self = Id(step) == 34647 || Id(step) == 34626 || Id(step) == potion;
+                    var self = id is 34647 or 34626 or 7546;
                     if (stepType.GetField("Target")!.GetValue(step)!.ToString() != (self ? "Self" : "Target"))
                         throw new InvalidOperationException("Opener target mismatch");
                 }
             }
-            Console.WriteLine("Phased IOpener: 17 verified GCDs, live flank/rear choice at BOTH Vicewinders, paired bites, optional potion, NO True North, first-hit resume: PASS (16 variants).");
+            uint Id(object a) => (uint)a.GetType().GetField("ActionId")!.GetValue(a)!;
+            Console.WriteLine("Level-100 standard IOpener: 12 verified GCDs, coils/finisher positional True North, auto toggle and first-hit resume: PASS (32 variants).");
             var teaType = assembly.GetType("ViperACR.Host.ViperTeaOpener", true)!;
-            var registeredOpeners = (IReadOnlyDictionary<string, Type>)rotationType.GetProperty("Openers")!.GetValue(null)!;
             if (!registeredOpeners.TryGetValue("80级绝亚起手", out var teaRegistered) || teaRegistered != teaType ||
                 !pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(teaType))
                 throw new InvalidOperationException("Missing level-80 TEA opener registration");
@@ -397,42 +395,13 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                 restoredDsrSettings.GetType().GetProperty("Opener")!.GetValue(restoredDsrSettings)!.ToString() != "Dsr90")
                 throw new InvalidOperationException("DSR opener configuration compatibility failed");
             Console.WriteLine("Level-90 DSR IOpener: 15 verified GCDs, fixed coils/bites, four Generations, correct self targets, potion/True North options, first-hit resume: PASS (8 variants).");
-            var fruType = assembly.GetType("ViperACR.Host.ViperFruOpener", true)!;
-            if (!registeredOpeners.TryGetValue("100级绝妖星起手", out var fruRegistered) || fruRegistered != fruType ||
-                !pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(fruType) ||
-                Activator.CreateInstance(fruType) == null)
-                throw new InvalidOperationException("Missing level-100 FRU opener registration/default constructor");
-            uint[] fruExpected = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
-                34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
-            foreach (var skipFirst in new[] { false, true })
-            {
-                var fru = Activator.CreateInstance(fruType, new object[] { skipFirst })!;
-                var fruSteps = ((System.Collections.IEnumerable)fruType.GetProperty("InCombatSequence")!.GetValue(fru)!).Cast<object>().ToArray();
-                uint FruId(object step) => (uint)step.GetType().GetField("ActionId")!.GetValue(step)!;
-                if (!fruSteps.Select(FruId).SequenceEqual(fruExpected.Skip(skipFirst ? 1 : 0)))
-                    throw new InvalidOperationException("FRU opener sequence mismatch");
-                var gcdCount = 0;
-                foreach (var step in fruSteps)
-                {
-                    var t = step.GetType();
-                    var id = FruId(step);
-                    var kind = t.GetField("Type")!.GetValue(step)!.ToString();
-                    var expectedKind = id is 34647 or 34634 or 34636 or 34637 or >= 34640 and <= 34643 ? "OffGcd" : "Gcd";
-                    if (kind == "Gcd") gcdCount++;
-                    if (kind != expectedKind ||
-                        (bool)t.GetProperty("RequiresVerification")!.GetValue(step)! != (kind == "Gcd") ||
-                        t.GetProperty("ExecutionGuard")!.GetValue(step) == null ||
-                        t.GetField("Target")!.GetValue(step)!.ToString() != (id is 34647 or 34626 ? "Self" : "Target"))
-                        throw new InvalidOperationException("FRU opener action contract mismatch");
-                }
-                if (gcdCount != (skipFirst ? 11 : 12)) throw new InvalidOperationException("FRU GCD count mismatch");
-            }
             var selection = assembly.GetType("ViperACR.Host.OpenerSelection", true)!;
             var labels = (string[])selection.GetField("Labels")!.GetValue(null)!;
-            if (!labels.SequenceEqual(new[] { "100级标准起手", "100级绝妖星起手", "90级绝龙诗起手", "80级绝亚起手" }) ||
-                !registeredOpeners.Values.Select(t => t.Name).SequenceEqual(new[] { "ViperStandardOpener", "ViperFruOpener", "ViperDsrOpener", "ViperTeaOpener" }))
+            if (!labels.SequenceEqual(new[] { "100级标准起手", "90级绝龙诗起手", "80级绝亚起手" }) ||
+                !registeredOpeners.Values.Select(t => t.Name).SequenceEqual(new[] { "ViperStandardOpener", "ViperDsrOpener", "ViperTeaOpener" }))
                 throw new InvalidOperationException("Opener display/registration order mismatch");
-            foreach (var (saved, index, mode) in new[] { (0, 0, "Standard"), (4, 1, "Fru100"), (3, 2, "Dsr90"), (2, 3, "Tea80"), (1, 0, "Standard"), (99, 0, "Standard") })
+            foreach (var (saved, index, mode) in new[] { (0, 0, "Standard"), (4, 0, "Standard"),
+                (3, 1, "Dsr90"), (2, 2, "Tea80"), (1, 0, "Standard"), (99, 0, "Standard") })
             {
                 var savedSettings = JsonSerializer.Deserialize("{\"Opener\":" + saved + "}", settings.GetType())!;
                 var oldMode = savedSettings.GetType().GetProperty("Opener")!.GetValue(savedSettings)!;
@@ -444,8 +413,7 @@ if (args.Length >= 2 && args[0] == "--validate-package")
                     restored.GetType().GetProperty("Opener")!.GetValue(restored)!.ToString() != mode)
                     throw new InvalidOperationException("Opener sort changed persisted choice / fallback failed");
             }
-            Console.WriteLine("Level-100 FRU IOpener: 12 verified GCDs, fixed coils/bites, paired Legacies, no potion/True North, first-hit resume: PASS (2 variants).");
-            Console.WriteLine("Four opener display/registration order and persisted selection compatibility/fallback: PASS (6 cases).");
+            Console.WriteLine("Three opener display/registration order and persisted selection compatibility/fallback: PASS (6 cases).");
             registry.GetMethod("ValidateExternalPackage", privateStatic)!.Invoke(null, [Path.GetFileName(folder), candidates, false]);
             Console.WriteLine($"PASS: PR {pr.GetName().Version} accepted package {Path.GetFileName(folder)}; rotations={candidates.Count}");
             foreach (var candidate in candidates)
@@ -490,12 +458,11 @@ if (args.Length >= 2 && args[0] == "--validate-opener-script")
     if (!pr.GetType("PromeRotation.Rotation.IOpener", true)!.IsAssignableFrom(type)) throw new Exception("Script IOpener mismatch");
     var opener = Activator.CreateInstance(type)!;
     var scriptActions = ((System.Collections.IEnumerable)type.GetProperty("InCombatSequence")!.GetValue(opener)!).Cast<object>().ToArray();
-    uint[] expected = [34620,34647,34622,34637,34636,34621,34636,34637,34620,34621,34636,34637,
-        34622,34637,34636,34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,
-        34633,34644,34645,34633,34644,34645,34607,34609,34613,34634];
+    uint[] expected = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
+        34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
     if (!scriptActions.Select(a => (uint)a.GetType().GetField("ActionId")!.GetValue(a)!).SequenceEqual(expected))
         throw new Exception("Standalone script differs from standard opener sequence");
-    if (scriptActions.Count(a => (bool)a.GetType().GetProperty("RequiresVerification")!.GetValue(a)!) != 17)
+    if (scriptActions.Count(a => (bool)a.GetType().GetProperty("RequiresVerification")!.GetValue(a)!) != 12)
         throw new Exception("Standalone script GCD verification mismatch");
     if (scriptActions.Any(a => a.GetType().GetProperty("ExecutionGuard")!.GetValue(a) == null))
         throw new Exception("Standalone script must guard each action with native/Long Arms range");
@@ -505,7 +472,7 @@ if (args.Length >= 2 && args[0] == "--validate-opener-script")
     var scheduled = ((System.Collections.IEnumerable)countdownType.GetProperty("ScheduledActions", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(countdown)!).Cast<object>().ToArray();
     if (scheduled.Length != 1 || (int)scheduled[0].GetType().GetField("Item1")!.GetValue(scheduled[0])! != 500)
         throw new Exception("Standalone script countdown must be 500ms");
-    Console.WriteLine("Standalone TXT: actual IOpener, standard sequence, 17 verified GCDs and 500ms scheduled Slither: PASS.");
+    Console.WriteLine("Standalone TXT: actual IOpener, 100-level standard sequence, 12 verified GCDs and 500ms scheduled Slither: PASS.");
     Console.WriteLine("No countdown factory evaluated; no game actions sent.");
     return;
 }

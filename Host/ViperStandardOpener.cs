@@ -11,47 +11,50 @@ public sealed class ViperStandardOpener : IOpener
 {
     public string OpenerName => StandardOpener.Name;
     private readonly bool _skipFirst;
-    private readonly uint _potion;
     private readonly StandardOpenerPlan _plan = new();
     public bool Started { get; private set; }
     public bool Complete => _plan.Complete;
-    public ViperStandardOpener() : this(false, 0) { }
-    public ViperStandardOpener(bool skipFirst, uint potion)
-    { _skipFirst = skipFirst; _potion = potion; }
+
+    public ViperStandardOpener() : this(false) { }
+    public ViperStandardOpener(bool skipFirst) => _skipFirst = skipFirst;
 
     public List<PAction> InCombatSequence
     {
         get
         {
-            // Also bind when PR selects the registered opener or the TXT override directly.
             if (RotationManager.GetCurrentRotation() is ViperRotation rotation && !rotation.BindStandardOpener(this))
                 return [];
             Started = true;
-            return Convert(_plan.InitialSteps(_skipFirst));
+            var actions = new List<PAction>();
+            foreach (var step in _plan.InitialSteps(_skipFirst))
+                actions.Add(Convert(step));
+            return actions;
         }
     }
 
-    public List<PAction>? NextPhase(Snapshot state) => _plan.Next(state) is { } steps ? Convert(steps) : null;
-
-    private List<PAction> Convert(IReadOnlyList<OpenerStep> steps)
+    public List<PAction>? NextPhase(Snapshot state, bool autoTrueNorth)
     {
-        var result = new List<PAction>();
-        foreach (var step in steps)
-        {
-            if (step.Potion && _potion == 0) continue;
-            var id = step.Potion ? _potion : step.ActionId;
-            var type = step.Potion ? ActionType.Item : Skills.IsOffGcd(id) ? ActionType.OffGcd : ActionType.Gcd;
-            result.Add(new PAction(id, type, step.Potion || Skills.IsSelf(id) ? ActionTargetType.Self : ActionTargetType.Target) {
-                RequiresVerification = type == ActionType.Gcd,
-                ExecutionGuard = () => ViperRotation.IsTargetWithinAttackRange(actionId: step.Potion ? Skills.SteelFangs : id)
-            });
-        }
-        return result;
+        if (_plan.Next(state, autoTrueNorth) is not { } steps) return null;
+        return steps.Select((step, index) => Convert(step,
+            step.ActionId == Skills.TrueNorth ? steps[index + 1].ActionId : 0)).ToList();
+    }
+
+    private static PAction Convert(OpenerStep step, uint positionalAction = 0)
+    {
+        var id = step.ActionId;
+        if (id == Skills.TrueNorth)
+            return new PAction(id, ActionType.OffGcd, ActionTargetType.Self) {
+                ExecutionGuard = () => ViperRotation.ShouldUseOpenerTrueNorth(positionalAction)
+            };
+        var type = Skills.IsOffGcd(id) ? ActionType.OffGcd : ActionType.Gcd;
+        return new PAction(id, type, Skills.IsSelf(id) ? ActionTargetType.Self : ActionTargetType.Target) {
+            RequiresVerification = type == ActionType.Gcd,
+            ExecutionGuard = () => ViperRotation.IsTargetWithinAttackRange(actionId: id)
+        };
     }
 
     public void InitializeCountdown(CountDownHandler handler)
     {
-        // The integrated ACR owns Slither in OnOutOfBattleUpdate at 500 ms.
-        // Do not also queue it here: this PR version ignores countdown action guards.
+        // Slither is submitted by the rotation's guarded 500 ms countdown callback.
     }
 }

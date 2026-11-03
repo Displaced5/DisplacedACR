@@ -4,7 +4,7 @@ public static class DsrOpener
 {
     public const string Name = "90级绝龙诗起手";
     public static bool CanStart(int level, RotationOptions options) =>
-        level == 90 && options.Mode == CombatMode.HighEnd && StandardOpener.CanStart(options);
+        level == 90 && options.Mode == CombatMode.HighEnd && OpenerRequirements.CanStart(options);
 
     public static IReadOnlyList<OpenerStep> Steps { get; } = Array.AsReadOnly(new OpenerStep[] {
         new(Skills.ReavingFangs), new(Skills.SerpentsIre),

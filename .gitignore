@@ -15,6 +15,8 @@ artifacts/
 *.tmp
 .env
 .env.*
+/.decomp/
+/.tmp-*.cs
 settings.json
 VPR.json
 Common.json

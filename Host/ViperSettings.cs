@@ -28,6 +28,8 @@ public sealed class ViperSettings
         {
             var result = File.Exists(FilePath) ? JsonSerializer.Deserialize<ViperSettings>(File.ReadAllText(FilePath)) ?? new() : new();
             result.AoeThreshold = Math.Clamp(result.AoeThreshold, 2, 8);
+            // Standard, Dynamic and the former Fru100 value all resolve to the
+            // renamed 100-level standard opener; DSR/TEA retain their values.
             result.Opener = OpenerSelection.FromIndex(OpenerSelection.ToIndex(result.Opener));
             result.ReserveCoils = Math.Clamp(result.ReserveCoils, 0, 2);
             result.BurstReserveSeconds = Math.Clamp(result.BurstReserveSeconds, 15, 60);

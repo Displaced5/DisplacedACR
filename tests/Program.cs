@@ -311,14 +311,9 @@ Pull("第一次读到最后半秒可以蛇行", 0.4f, true, true);
 Pull("蛇行后关闭开关", 0.3f, false, false);
 Pull("蛇行后再开开关仍不重复", 0.2f, true, false);
 void Assert(string name, bool condition) { checks++; if (!condition) failures.Add(name); }
-uint[] standardActions = [34620,34647,0,34622,34637,34636,34621,34636,34637,
-    34620,34621,34636,34637,34622,34637,34636,34626,34627,34640,34628,34641,
-    34629,34642,34630,34643,34631,34633,34644,34645,34633,34644,34645,34607,34609,34613,34634];
-Assert("标准起手36步序列逐项一致", StandardOpener.Steps.Select(s => s.ActionId).SequenceEqual(standardActions));
-Assert("日随忽略标准选择直接动态循环", !ModePolicy.UsesStandardOpener(CombatMode.Daily, true));
-Assert("日随动态选择直接动态循环", !ModePolicy.UsesStandardOpener(CombatMode.Daily, false));
-Assert("高难标准选择标准起手", ModePolicy.UsesStandardOpener(CombatMode.HighEnd, true));
-Assert("高难动态选择不提交标准起手", !ModePolicy.UsesStandardOpener(CombatMode.HighEnd, false));
+uint[] standardActions = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
+    34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
+Assert("100级标准起手逐项序列", StandardOpener.Steps.Select(s => s.ActionId).SequenceEqual(standardActions));
 Assert("长臂猿增加3米", CombatRange.Bonus == 3);
 foreach (var arms in new[] { false, true })
 {
@@ -429,19 +424,19 @@ foreach (var burstEnabled in new[] { false, true })
 foreach (var viceEnabled in new[] { false, true })
 foreach (var reawakenEnabled in new[] { false, true })
 foreach (var ireEnabled in new[] { false, true })
-    Assert($"固定起手尊重四开关 {burstEnabled}/{viceEnabled}/{reawakenEnabled}/{ireEnabled}",
-        StandardOpener.CanStart(options with { Burst = burstEnabled, Cooldowns = viceEnabled,
+    Assert($"起手尊重四开关 {burstEnabled}/{viceEnabled}/{reawakenEnabled}/{ireEnabled}",
+        OpenerRequirements.CanStart(options with { Burst = burstEnabled, Cooldowns = viceEnabled,
             Reawaken = reawakenEnabled, SerpentsIre = ireEnabled }) ==
         (burstEnabled && viceEnabled && reawakenEnabled && ireEnabled));
 Assert("蛇行阈值严格500ms", CountdownPull.TriggerMilliseconds == 500 && CountdownPull.TriggerSeconds == 0.5f);
-Assert("标准起手17个GCD", StandardOpener.Steps.Count(s => !s.Potion && !Skills.IsOffGcd(s.ActionId)) == 17);
-Assert("药只有一个可选位置", StandardOpener.Steps.Count(s => s.Potion) == 1 && StandardOpener.Steps[2].Potion);
-Assert("标准起手不使用真北", StandardOpener.Steps.All(s => s.ActionId != Skills.TrueNorth));
+Assert("100级标准起手12个GCD", StandardOpener.Steps.Count(s => !Skills.IsOffGcd(s.ActionId)) == 12);
+Assert("100级标准起手不固定塞真北", StandardOpener.Steps.All(s => s.ActionId != Skills.TrueNorth));
 Assert("起手不重复蛇行", StandardOpener.Steps.All(s => s.ActionId != Skills.Slither));
-Assert("首击强碎灵蛇", StandardOpener.Steps[0].ActionId == Skills.Vicewinder);
+Assert("100级标准起手首击穿裂尖齿", StandardOpener.Steps[0].ActionId == Skills.ReavingFangs);
 Assert("结束背裂与蛇尾击", StandardOpener.Steps[^2].ActionId == Skills.HindsbaneFang && StandardOpener.Steps[^1].ActionId == Skills.DeathRattle);
-Assert("两个强碎灵蛇", StandardOpener.Steps.Count(s => s.ActionId == Skills.Vicewinder) == 2);
-Assert("两个飞蛇之尾", StandardOpener.Steps.Count(s => s.ActionId == Skills.UncoiledFury) == 2);
+Assert("100级标准起手仅一把强碎灵蛇", StandardOpener.Steps.Count(s => s.ActionId == Skills.Vicewinder) == 1);
+Assert("100级标准仅高难100级启用", StandardOpener.CanStart(100, options) && !StandardOpener.CanStart(99, options) &&
+    !StandardOpener.CanStart(100, daily));
 var approach = new PrepullAttack();
 Assert("未蛇行不自动开怪", !approach.TrySubmit(1000, 0.3f, 123, true, true, Skills.Vicewinder));
 approach.Arm(123, 1000, 0.5f);
@@ -474,56 +469,72 @@ Assert("无效倒计时不启用攻击", !approach.HasPending);
 approach.Arm(123, 1000, 0.5f);
 Assert("标准起手关闭可使用基础首击", approach.TrySubmit(1600, 0, 123, true, true, Skills.ReavingFangs));
 Assert("基础首击不会误判强碎灵蛇已用", !approach.IsRecentFirstHit(1700, 123, Skills.Vicewinder));
-foreach (var firstFacing in new[] { Facing.Flank, Facing.Rear })
-foreach (var secondFacing in new[] { Facing.Flank, Facing.Rear })
+var plan = new StandardOpenerPlan();
+Assert("标准起手首段包含穿裂、蛇灵气、疾速利齿、强碎灵蛇",
+    plan.InitialSteps(false).Select(x => x.ActionId).SequenceEqual(new uint[] {
+        Skills.ReavingFangs, Skills.SerpentsIre, Skills.SwiftskinsSting, Skills.Vicewinder }));
+Assert("蛇行后首击已完成时跳过穿裂",
+    plan.InitialSteps(true).Select(x => x.ActionId).SequenceEqual(new uint[] {
+        Skills.SerpentsIre, Skills.SwiftskinsSting, Skills.Vicewinder }));
+var flankState = State() with { DreadCombo = 1, NeedsPositional = true, Facing = Facing.Flank,
+    Charges = new() { [Skills.TrueNorth] = 2 } };
+var firstCoil = plan.Next(flankState, true)!;
+Assert("侧身正确不浪费真北", firstCoil[0].ActionId == Skills.HuntersCoil);
+Assert("猛袭盘蛇接连击乱击", firstCoil.Select(x => x.ActionId)
+    .SequenceEqual(new uint[] { Skills.HuntersCoil, Skills.TwinfangBite, Skills.TwinbloodBite }));
+var rearState = flankState with { DreadCombo = 2, Facing = Facing.Rear };
+var secondCoil = plan.Next(rearState, true)!;
+Assert("背身正确不浪费真北", secondCoil[0].ActionId == Skills.SwiftskinsCoil);
+Assert("第一套盘蛇量谱状态不匹配时不推进", plan.Next(rearState with { DreadCombo = 3 }, true) == null);
+var endPhase = plan.Next(State(), true)!;
+Assert("蛇剑阶段后接祖灵连段", endPhase.Select(x => x.ActionId)
+    .SequenceEqual(StandardOpener.Steps.Skip(10).Take(10).Select(x => x.ActionId)) && !plan.Complete);
+Assert("祖灵阶段未结束不打背裂", plan.Next(State() with { Tribute = 1 }, true) == null);
+Assert("祖灵状态过渡时不打背裂", plan.Next(Buff(State(), Buffs.Reawakened), true) == null);
+var finisher = plan.Next(rearState with { DreadCombo = 0, Facing = Facing.Flank }, true)!;
+Assert("背裂前身位错误使用真北并正确收尾", finisher.Select(x => x.ActionId)
+    .SequenceEqual(new uint[] { Skills.TrueNorth, Skills.HindsbaneFang, Skills.DeathRattle }) && plan.Complete);
+Assert("起手完成不重复执行", plan.Next(rearState, true) == null);
+var wrongPositionPlan = new StandardOpenerPlan();
+var wrongFacing = flankState with { Facing = Facing.Rear };
+Assert("身位错误且真北可用时先使用真北", wrongPositionPlan.Next(wrongFacing, true) is { Count: > 0 } trueNorthPhase &&
+    trueNorthPhase[0].ActionId == Skills.TrueNorth && trueNorthPhase[1].ActionId == Skills.HuntersCoil);
+var noTrueNorthPlan = new StandardOpenerPlan();
+Assert("关闭自动真北时不插入", noTrueNorthPlan.Next(wrongFacing, false) is { } noNorth &&
+    noNorth[0].ActionId == Skills.HuntersCoil);
+var unavailableTrueNorthPlan = new StandardOpenerPlan();
+Assert("没有真北充能时不插入", unavailableTrueNorthPlan.Next(wrongFacing with {
+    Charges = new() { [Skills.TrueNorth] = 0 } }, true) is { } noCharge && noCharge[0].ActionId == Skills.HuntersCoil);
+Assert("无需身位时不插入真北", !OpenerPositioning.IsWrong(Skills.HuntersCoil, flankState with { NeedsPositional = false }));
+foreach (var action in new[] { Skills.HuntersCoil, Skills.SwiftskinsCoil, Skills.HindsbaneFang })
+foreach (var facing in new[] { Facing.None, Facing.Front, Facing.Flank, Facing.Rear })
+foreach (var enabled in new[] { false, true })
+foreach (var buff in new[] { false, true })
 {
-    var plan = new StandardOpenerPlan();
-    Assert("起手初段不提前固化盘蛇", plan.InitialSteps(false).Select(s => s.ActionId)
-        .SequenceEqual(new uint[] { Skills.Vicewinder, Skills.SerpentsIre, 0 }));
-    Assert("已打首发只省略强碎灵蛇", plan.InitialSteps(true).Select(s => s.ActionId)
-        .SequenceEqual(new uint[] { Skills.SerpentsIre, 0 }));
-    Assert("等待初次强碎灵蛇量谱", plan.Next(State()) == null);
-    var first = firstFacing == Facing.Flank ? Skills.HuntersCoil : Skills.SwiftskinsCoil;
-    var firstState = State() with { DreadCombo = 1, NeedsPositional = true, Facing = firstFacing };
-    var phase = plan.Next(firstState)!;
-    Assert($"标准起手第一套实时{firstFacing}", phase[0].ActionId == first);
-    Assert("第一招双牙与所选盘蛇一致", phase.Skip(1).Select(s => s.ActionId).SequenceEqual(
-        first == Skills.HuntersCoil ? new uint[] { Skills.TwinfangBite, Skills.TwinbloodBite }
-            : new uint[] { Skills.TwinbloodBite, Skills.TwinfangBite }));
-    Assert("未收到第一盘蛇量谱不推进", plan.Next(firstState) == null);
-    var remaining = first == Skills.HuntersCoil ? Skills.SwiftskinsCoil : Skills.HuntersCoil;
-    var second = plan.Next(firstState with { DreadCombo = first == Skills.HuntersCoil ? 2 : 3,
-        Facing = firstFacing == Facing.Flank ? Facing.Rear : Facing.Flank })!;
-    Assert("换位不重复第一招", second[0].ActionId == remaining);
-    Assert("第一套完成后才打第二次强碎灵蛇", plan.Next(State())![0].ActionId == Skills.Vicewinder);
-    var nextState = firstState with { Facing = secondFacing };
-    var next = plan.Next(nextState)!;
-    var nextFirst = secondFacing == Facing.Flank ? Skills.HuntersCoil : Skills.SwiftskinsCoil;
-    Assert($"第二次强碎灵蛇独立读取{secondFacing}", next[0].ActionId == nextFirst);
-    var nextLast = plan.Next(nextState with { DreadCombo = nextFirst == Skills.HuntersCoil ? 2 : 3 })!;
-    Assert("第二套仍完成另一招", nextLast[0].ActionId != nextFirst);
-    var tail = plan.Next(State())!;
-    Assert("自适应后祖灵与飞蛇收尾不变", tail.Select(s => s.ActionId)
-        .SequenceEqual(StandardOpener.Steps.Skip(16).Select(s => s.ActionId)));
-    Assert("标准起手阶段完成不再重复", plan.Complete && plan.Next(State()) == null);
+    var positionalState = flankState with { Facing = facing,
+        BuffTimes = new() { [Buffs.TrueNorth] = buff ? 5 : 0 } };
+    var wrong = facing != (action == Skills.HuntersCoil ? Facing.Flank : Facing.Rear);
+    Assert($"起手真北身位/开关/状态 {action}/{facing}/{enabled}/{buff}",
+        OpenerPositioning.ShouldUseTrueNorth(action, positionalState, enabled) == (enabled && !buff && wrong));
 }
-var invalidPlan = new StandardOpenerPlan();
-uint[] fruActions = [34607,34647,34609,34620,34621,34636,34637,34622,34637,34636,
-    34626,34627,34640,34628,34641,34629,34642,34630,34643,34631,34613,34634];
-Assert("绝妖星起手逐项固定顺序", FruOpener.Steps.Select(x => x.ActionId).SequenceEqual(fruActions));
-Assert("绝妖星起手12GCD", FruOpener.Steps.Count(x => !Skills.IsOffGcd(x.ActionId)) == 12);
-Assert("绝妖星起手无药和真北", FruOpener.Steps.All(x => !x.Potion && x.ActionId != Skills.TrueNorth));
-Assert("绝妖星起手所有技能100级可用", FruOpener.Steps.All(x => Skills.Level(x.ActionId) <= 100));
-Assert("绝妖星起手仅一次强碎灵蛇", FruOpener.Steps.Count(x => x.ActionId == Skills.Vicewinder) == 1);
-Assert("绝妖星起手第一GCD后蛇灵气", FruOpener.Steps[0].ActionId == Skills.ReavingFangs && FruOpener.Steps[1].ActionId == Skills.SerpentsIre);
-Assert("绝妖星起手四组祖灵配对", FruOpener.Steps.Skip(11).Take(8).Select(x => x.ActionId)
+Assert("真北原生不可用时不插入", !OpenerPositioning.ShouldUseTrueNorth(Skills.HuntersCoil,
+    wrongFacing with { UnusableOffGcd = [Skills.TrueNorth] }, true));
+Assert("无目标不插入真北", !OpenerPositioning.ShouldUseTrueNorth(Skills.HuntersCoil,
+    wrongFacing with { HasTarget = false }, true));
+var waitingPlan = new StandardOpenerPlan();
+Assert("未收到强碎量谱时等待", waitingPlan.Next(State(), true) == null);
+waitingPlan.Next(flankState, true);
+Assert("盘蛇量谱未更新时不重复执行", waitingPlan.Next(flankState, true) == null);
+Assert("第一盘蛇后量谱未匹配时不推进", waitingPlan.Next(flankState with { DreadCombo = 0 }, true) == null);
+Assert("第二盘蛇身位错误时使用真北", waitingPlan.Next(rearState with { Facing = Facing.Flank }, true)![0].ActionId == Skills.TrueNorth);
+Assert("100级标准起手所有技能可用", StandardOpener.Steps.All(x => Skills.Level(x.ActionId) <= 100));
+Assert("100级标准起手第一GCD后蛇灵气", StandardOpener.Steps[0].ActionId == Skills.ReavingFangs && StandardOpener.Steps[1].ActionId == Skills.SerpentsIre);
+Assert("100级标准起手四组祖灵配对", StandardOpener.Steps.Skip(11).Take(8).Select(x => x.ActionId)
     .SequenceEqual(new uint[] {34627,34640,34628,34641,34629,34642,34630,34643}));
-Assert("绝妖星起手大蛇牙背裂蛇尾收尾", FruOpener.Steps.TakeLast(3).Select(x => x.ActionId).SequenceEqual(new uint[] {34631,34613,34634}));
-Assert("绝妖星起手仅100级高难", FruOpener.CanStart(100, options) && !FruOpener.CanStart(99, options) &&
-    !FruOpener.CanStart(90, options) && !FruOpener.CanStart(100, daily));
-Assert("绝妖星起手尊重四项爆发QT", !FruOpener.CanStart(100, options with { Burst = false }) &&
-    !FruOpener.CanStart(100, options with { Cooldowns = false }) && !FruOpener.CanStart(100, options with { Reawaken = false }) &&
-    !FruOpener.CanStart(100, options with { SerpentsIre = false }));
+Assert("100级标准起手尾段", StandardOpener.Steps.TakeLast(3).Select(x => x.ActionId).SequenceEqual(new uint[] {34631,34613,34634}));
+Assert("100级标准起手尊重四项爆发QT", !StandardOpener.CanStart(100, options with { Burst = false }) &&
+    !StandardOpener.CanStart(100, options with { Cooldowns = false }) && !StandardOpener.CanStart(100, options with { Reawaken = false }) &&
+    !StandardOpener.CanStart(100, options with { SerpentsIre = false }));
 uint[] dsrActions = [34607,34647,34609,0,34620,7546,34621,34636,34637,34622,34637,34636,
     34626,34627,34628,34629,34630,34620,34621,34636,34637,34622,34637,34636,34613,34634,34633];
 Assert("绝龙诗起手逐项固定顺序", DsrOpener.Steps.Select(x => x.ActionId).SequenceEqual(dsrActions));
@@ -563,44 +574,6 @@ Assert("绝亚真北重开倒计时复位", !teaCountdown.TrySubmit(10, true, Te
 teaCountdown.Reset();
 Assert("绝亚真北条件不满足不提交", !teaCountdown.TrySubmit(4, false, TeaOpener.TrueNorthSeconds));
 Assert("绝亚真北锁结束后窗口内可重试", teaCountdown.TrySubmit(3.9f, true, TeaOpener.TrueNorthSeconds));
-foreach (var facing in new[] { Facing.Flank, Facing.Rear })
-{
-    var preparedPlan = new StandardOpenerPlan();
-    var actions = preparedPlan.InitialSteps(false).Select(x => x.ActionId).ToList();
-    var firstCoil = State() with { DreadCombo = 1, NeedsPositional = true, Facing = facing };
-    actions.AddRange(preparedPlan.Next(firstCoil)!.Select(x => x.ActionId));
-    actions.AddRange(preparedPlan.Next(firstCoil with { DreadCombo = facing == Facing.Flank ? 2 : 3 })!.Select(x => x.ActionId));
-    var freeState = Buff(State() with { Gauge = 20 }, Buffs.ReadyToReawaken);
-    Assert($"标准起手{facing}预备超出范围不提交祖灵",
-        preparedPlan.Next(freeState with { Distance = 6 })![0].ActionId == Skills.Vicewinder);
-    // Use a fresh plan for the available free-Reawaken branch.
-    preparedPlan = new StandardOpenerPlan();
-    preparedPlan.Next(firstCoil);
-    preparedPlan.Next(firstCoil with { DreadCombo = facing == Facing.Flank ? 2 : 3 });
-    var freeSteps = preparedPlan.Next(freeState)!;
-    Assert($"标准起手{facing}第一套结束预备先于第二蛇剑", freeSteps[0].ActionId == Skills.Reawaken &&
-        freeSteps.Select(x => x.ActionId).SequenceEqual(StandardOpener.Steps.Skip(16).Take(10).Select(x => x.ActionId)));
-    actions.AddRange(freeSteps.Select(x => x.ActionId));
-    Assert($"标准起手{facing}祖灵进行中不重新蛇剑",
-        preparedPlan.Next(freeState with { Tribute = 3, DreadCombo = 9 }) == null);
-    Assert($"标准起手{facing}祖灵最后一档蛇剑状态归零仍等待",
-        preparedPlan.Next(freeState with { Tribute = 1, DreadCombo = 0 }) == null);
-    Assert($"标准起手{facing}祖灵状态过渡包仍等待",
-        preparedPlan.Next(Buff(State(), Buffs.Reawakened)) == null);
-    var afterFree = preparedPlan.Next(State())!;
-    Assert($"标准起手{facing}祖灵结束接第二蛇剑", afterFree.Single().ActionId == Skills.Vicewinder);
-    actions.AddRange(afterFree.Select(x => x.ActionId));
-    actions.AddRange(preparedPlan.Next(firstCoil)!.Select(x => x.ActionId));
-    actions.AddRange(preparedPlan.Next(firstCoil with { DreadCombo = facing == Facing.Flank ? 2 : 3 })!.Select(x => x.ActionId));
-    var finalSteps = preparedPlan.Next(State())!;
-    actions.AddRange(finalSteps.Select(x => x.ActionId));
-    Assert($"标准起手{facing}收尾不重复祖灵且完整", preparedPlan.Complete &&
-        finalSteps.Select(x => x.ActionId).SequenceEqual(StandardOpener.Steps.Skip(26).Select(x => x.ActionId)));
-    Assert($"标准起手{facing}仍17GCD且只使用一次祖灵",
-        actions.Count(x => x != 0 && !Skills.IsOffGcd(x)) == 17 && actions.Count(x => x == Skills.Reawaken) == 1);
-}
-Assert("失去目标不推进标准起手", invalidPlan.Next(State() with { HasTarget = false, DreadCombo = 1 }) == null);
-Assert("脱战不推进标准起手", invalidPlan.Next(State() with { Active = false, DreadCombo = 1 }) == null);
 var abilityWindow = new AbilityWindow();
 long tick = 1000;
 // Reproduce PR's missed reset: every GCD is queued at 0.2s, so <=0.1s is never observed.

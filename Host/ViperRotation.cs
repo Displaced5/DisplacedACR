@@ -26,7 +26,6 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
     };
     public static IReadOnlyDictionary<string, Type> Openers { get; } = new Dictionary<string, Type> {
         [StandardOpener.Name] = typeof(ViperStandardOpener),
-        [FruOpener.Name] = typeof(ViperFruOpener),
         [DsrOpener.Name] = typeof(ViperDsrOpener),
         [TeaOpener.Name] = typeof(ViperTeaOpener)
     };
@@ -40,10 +39,9 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
     private readonly AbilityWindow _abilityWindow = new();
     private readonly DailyEngagement _dailyEngagement = new();
     private readonly BasicAutomation _basicAutomation = new();
-    private ViperStandardOpener? _activeOpener;
     private ViperTeaOpener? _activeTeaOpener;
     private ViperDsrOpener? _activeDsrOpener;
-    private ViperFruOpener? _activeFruOpener;
+    private ViperStandardOpener? _activeStandardOpener;
     private long _openerPhaseTime;
     private uint _openerTarget;
     private string _error;
@@ -56,13 +54,14 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         LegacyConfiguration.Migrate();
         ErosUIFramework.Configure("VPR", "蝰蛇剑士", QtList, _ => false, (_, _) => true,
             key => QtList.GetValueOrDefault(key), new Dictionary<string, (string key, bool invert)[]>(),
-            ["蛇行", "真北", "内丹", "浴血", "牵制", "冲刺", "极限技", ViperPotion.Name],
+            ["蛇行", "真北", "内丹", "浴血", "亲疏自行", "牵制", "冲刺", "极限技", ViperPotion.Name],
             b => {
                 b.Fixed("蛇行", Skills.Slither, ActionType.OffGcd, ActionTargetType.Target,
                     () => IsTargetWithinAttackRange(actionId: Skills.Slither));
                 b.Fixed("真北", Skills.TrueNorth, ActionType.OffGcd, ActionTargetType.Self);
                 b.Fixed("内丹", Skills.SecondWind, ActionType.OffGcd, ActionTargetType.Self);
                 b.Fixed("浴血", Skills.Bloodbath, ActionType.OffGcd, ActionTargetType.Self);
+                b.Fixed("亲疏自行", 7548, ActionType.OffGcd, ActionTargetType.Self);
                 b.Fixed("牵制", 7549, ActionType.OffGcd, ActionTargetType.Target);
                 b.Fixed("冲刺", 3, ActionType.OffGcd, ActionTargetType.Self);
                 b.Execute("极限技", new ExecuteLogic(ViperLimitBreak.Queue), ViperLimitBreak.IconActionId);
@@ -95,10 +94,9 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         _prepullAttack.Reset(); _countdownPull.Reset();
         _abilityWindow.Reset();
         _dailyEngagement.Reset();
-        _activeOpener = null;
         _activeTeaOpener = null; _teaTrueNorth.Reset();
         _activeDsrOpener = null;
-        _activeFruOpener = null;
+        _activeStandardOpener = null;
         ErosUIFramework.Uninstall();
         ErosUIJobEnv.DrawRotationSettings = null;
         ErosUIJobEnv.DrawOpenerSettings = null;
@@ -116,10 +114,15 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         TrueNorthGcdPercent = _settings.TrueNorthGcdPercent
     };
     private static CombatMode CurrentMode => ErosUISettings.Instance.IsHighEnd ? CombatMode.HighEnd : CombatMode.Daily;
-    private bool UsesStandardOpener => ModePolicy.UsesStandardOpener(CurrentMode, _settings.Opener == OpenerMode.Standard);
     private bool UsesTeaOpener => CurrentMode == CombatMode.HighEnd && _settings.Opener == OpenerMode.Tea80;
     private bool UsesDsrOpener => CurrentMode == CombatMode.HighEnd && _settings.Opener == OpenerMode.Dsr90;
-    private bool UsesFruOpener => CurrentMode == CombatMode.HighEnd && _settings.Opener == OpenerMode.Fru100;
+    // Standard/Dynamic/Fru100 are retained as persisted enum values for old files;
+    // all three now select the renamed 100-level standard (FRU) opener.
+    private bool UsesStandardOpener => CurrentMode == CombatMode.HighEnd &&
+        _settings.Opener is OpenerMode.Standard or OpenerMode.Dynamic or OpenerMode.Fru100;
+    internal static bool OpenerTrueNorthEnabled => Qt("自动真北");
+    internal static bool ShouldUseOpenerTrueNorth(uint positionalAction) =>
+        OpenerPositioning.ShouldUseTrueNorth(positionalAction, HostSnapshot.Capture(), OpenerTrueNorthEnabled);
     private static bool Qt(string key) => PromeSettings.Instance.GetQt(key);
     internal static bool IsTargetWithinAttackRange(uint expectedTarget = 0, uint actionId = Skills.SteelFangs)
     {
@@ -142,12 +145,36 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         _cached = HostSnapshot.Capture(); _cacheTime = now;
         return _cached;
     }
-    private void Reset() { _cached = null; _countdownPull.Reset(); _teaTrueNorth.Reset(); _abilityWindow.Reset(); _activeOpener = null; _activeTeaOpener = null; _activeDsrOpener = null; _activeFruOpener = null; _gcdReason = "等待战斗"; _ogcdReason = "等待插入窗口"; }
+    private void Reset() { _cached = null; _countdownPull.Reset(); _teaTrueNorth.Reset(); _abilityWindow.Reset(); _activeTeaOpener = null; _activeDsrOpener = null; _activeStandardOpener = null; _gcdReason = "等待战斗"; _ogcdReason = "等待插入窗口"; }
 
     private void Update()
     {
         UpdateBasicAutomation();
-        _diagnostics.Update(Read, _gcdReason, _ogcdReason, _activeOpener is { Started: true } || _activeTeaOpener is { Started: true } || _activeDsrOpener is { Started: true } || _activeFruOpener is { Started: true });
+        _diagnostics.Update(Read, _gcdReason, _ogcdReason, _activeTeaOpener is { Started: true } || _activeDsrOpener is { Started: true } || _activeStandardOpener is { Started: true });
+    }
+
+    private void UpdateStandardOpener()
+    {
+        if (_activeStandardOpener is not { Started: true, Complete: false }) return;
+        if (!GameData.IsInCombat() || PRCore.Me is not { IsDead: false } ||
+            PRCore.Target is not { IsDead: false, IsTargetable: true } target || target.EntityId != _openerTarget)
+        { _activeStandardOpener = null; return; }
+        if (PromeSettings.Instance.EnableAcr != AcrState.On || GameData.IsPlayerOccupied() ||
+            ActionQueueManager.HasActionsInQueue() || ActionUpdaterRouter.HasActiveCommand())
+        { _openerPhaseTime = Environment.TickCount64; return; }
+        if (!IsTargetWithinAttackRange(_openerTarget, Skills.UncoiledFury))
+        { _openerPhaseTime = Environment.TickCount64; return; }
+        _cached = null;
+        if (_activeStandardOpener.NextPhase(Read(), OpenerTrueNorthEnabled) is { } phase)
+        {
+            ActionQueueManager.Enqueue(phase);
+            _openerPhaseTime = Environment.TickCount64;
+        }
+        else if (Environment.TickCount64 - _openerPhaseTime > 5000)
+        {
+            _activeStandardOpener = null;
+            _gcdReason = "起手状态不符，已回到动态循环";
+        }
     }
 
     private void UpdateBasicAutomation()
@@ -169,38 +196,14 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         PRCore.Target is Dalamud.Game.ClientState.Objects.Types.IBattleNpc npc && BasicAutomation.IsTrainingDummy(npc.NameId),
         ErosUISettings.Instance.OpenerAutoPull);
 
-    private void UpdateStandardOpener()
+    private bool OpenerPending()
     {
-        if (_activeOpener is not { Started: true, Complete: false }) return;
-        if (!GameData.IsInCombat() || PRCore.Me is not { IsDead: false } ||
-            PRCore.Target is not { IsDead: false, IsTargetable: true } target || target.EntityId != _openerTarget)
-        { _activeOpener = null; return; }
-        if (PromeSettings.Instance.EnableAcr != AcrState.On || GameData.IsPlayerOccupied())
-        { _openerPhaseTime = Environment.TickCount64; return; }
-        if (ActionQueueManager.HasActionsInQueue() || ActionUpdaterRouter.HasActiveCommand())
-        { _openerPhaseTime = Environment.TickCount64; return; }
-        if (!IsTargetWithinAttackRange(_openerTarget, Skills.UncoiledFury))
-        { _openerPhaseTime = Environment.TickCount64; return; }
-        // Refresh after the preceding verified hit; don't select using an earlier cached gauge.
-        _cached = null;
-        if (_activeOpener.NextPhase(Read()) is { } phase)
-        {
-            ActionQueueManager.Enqueue(phase);
-            _openerPhaseTime = Environment.TickCount64;
-        }
-        else if (Environment.TickCount64 - _openerPhaseTime > 5000)
-        {
-            _activeOpener = null;
-            _gcdReason = "起手量谱不符，已回到动态循环";
-        }
-    }
-
-    private bool StandardOpenerPending()
-    {
-        if (_activeFruOpener is { Started: true })
+        UpdateStandardOpener();
+        if (_activeStandardOpener is { Started: true })
         {
             if (ActionQueueManager.HasActionsInQueue() || ActionUpdaterRouter.HasActiveCommand()) return true;
-            _activeFruOpener = null;
+            if (!_activeStandardOpener.Complete) return true;
+            _activeStandardOpener = null;
         }
         if (_activeDsrOpener is { Started: true })
         {
@@ -212,11 +215,8 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
             if (ActionQueueManager.HasActionsInQueue() || ActionUpdaterRouter.HasActiveCommand()) return true;
             _activeTeaOpener = null;
         }
-        if (_activeOpener is { Complete: true } && !ActionQueueManager.HasActionsInQueue() &&
-            !ActionUpdaterRouter.HasActiveCommand()) _activeOpener = null;
-        UpdateStandardOpener();
-        return _activeOpener is { Started: true, Complete: false } ||
-            _activeOpener is { Started: true } &&
+        return _activeStandardOpener is { Started: true, Complete: false } ||
+            _activeStandardOpener is { Started: true } &&
             (ActionQueueManager.HasActionsInQueue() || ActionUpdaterRouter.HasActiveCommand());
     }
 
@@ -302,7 +302,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
             me is { IsDead: false } && me.ClassJob.RowId == 41 && !GameData.IsInPvPArea() &&
             target is { IsDead: false, IsTargetable: true } && target.CanUseAttackActionOn() &&
             !TargetHelper.TargetHasInvincibilityStatus(target);
-        var first = GetOpener() is ViperStandardOpener ? Skills.Vicewinder : me is { Level: >= 10 } ? Skills.ReavingFangs : Skills.SteelFangs;
+        var first = me is { Level: >= 10 } ? Skills.ReavingFangs : Skills.SteelFangs;
         var ready = allowed && !GameData.IsPlayerOccupied() &&
             ActionHelper.GetAnimationLock() <= 0.05f && ActionHelper.GetGcdRemain() <= 0.05f &&
             IsTargetWithinAttackRange(target!.EntityId, first) &&
@@ -316,7 +316,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
 
     public PAction? NextGcd()
     {
-        if (StandardOpenerPending()) return null;
+        if (OpenerPending()) return null;
         var state = Read();
         var result = ViperEngine.Gcd(state, Options());
         _gcdReason = result?.Reason ?? "无可用 GCD／目标不在范围";
@@ -324,7 +324,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
     }
     public PAction? NextOffGcd()
     {
-        if (StandardOpenerPending()) return null;
+        if (OpenerPending()) return null;
         var state = Read(); var options = Options();
         var result = ViperEngine.OffGcd(state, options);
         _ogcdReason = result?.Reason ?? "无需插入技能";
@@ -349,7 +349,7 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
     }
     public PAction? NextAlways()
     {
-        if (StandardOpenerPending()) return null;
+        if (OpenerPending()) return null;
         var state = Read();
         if (!state.Active || !state.HasTarget || ActionHelper.GetAnimationLock() > 0) return null;
         _abilityWindow.Observe(ActionHelper.GetGcdElapsed(), state.GcdRemaining);
@@ -382,31 +382,10 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
     }
     public IOpener? GetOpener()
     {
-        if (UsesFruOpener) return GetFruOpener();
+        if (UsesStandardOpener) return GetStandardOpener();
         if (UsesDsrOpener) return GetDsrOpener();
         if (UsesTeaOpener) return GetTeaOpener();
-        var me = PRCore.Me;
-        var target = PRCore.Target;
-        if (PromeSettings.Instance.EnableAcr != AcrState.On || !UsesStandardOpener || !IsTargetWithinAttackRange() ||
-            !StandardOpener.CanStart(Options()) ||
-            me is not { IsDead: false, Level: >= 100 } ||
-            me.ClassJob.RowId != 41 || GameData.IsInPvPArea() ||
-            target is not { IsDead: false, IsTargetable: true } || !target.CanUseAttackActionOn() ||
-            TargetHelper.TargetHasInvincibilityStatus(target)) return null;
-        // A carried-over free Reawaken belongs to the dynamic priority, not another opener Ire.
-        if (me.GetStatusLeftTime(Buffs.ReadyToReawaken) > 0) return null;
-        // Combat begins after the triggering hit. Avoid duplicating a manually used first Vicewinder.
-        var firstUsed = (int)JobGaugeHelper.VPR.蛇剑连状态 == 1 ||
-            _prepullAttack.IsRecentFirstHit(Environment.TickCount64, target.EntityId, Skills.Vicewinder);
-        if (JobGaugeHelper.VPR.祖灵力档数 != 0 ||
-            !firstUsed && (int)JobGaugeHelper.VPR.蛇剑连状态 != 0 ||
-            Skills.Vicewinder.GetActionCharges() < (firstUsed ? 1 : 2) ||
-            !ActionHelper.IsReady(Skills.SerpentsIre) || !Skills.SerpentsIre.IsActionAvailableByLevelAndQuest())
-            return null;
-        var potion = Qt("爆发药") ? GameData.GetBestPotionId() : 0;
-        if (potion != 0 && ActionHelper.IsItemOnCooldown(potion)) potion = 0;
-        var opener = new ViperStandardOpener(firstUsed, potion);
-        return opener;
+        return null;
     }
 
     private ViperTeaOpener? GetTeaOpener()
@@ -471,45 +450,39 @@ public sealed class ViperRotation : IRotation, IRotationLifecycle
         return true;
     }
 
-    private ViperFruOpener? GetFruOpener()
+    private ViperStandardOpener? GetStandardOpener()
     {
         var me = PRCore.Me;
         var target = PRCore.Target;
-        if (PromeSettings.Instance.EnableAcr != AcrState.On || !UsesFruOpener ||
-            me is not { IsDead: false } || me.ClassJob.RowId != 41 || !FruOpener.CanStart(me.Level, Options()) ||
+        if (PromeSettings.Instance.EnableAcr != AcrState.On || !UsesStandardOpener ||
+            me is not { IsDead: false } || me.ClassJob.RowId != 41 || !StandardOpener.CanStart(me.Level, Options()) ||
             GameData.IsInPvPArea() || !IsTargetWithinAttackRange() ||
             target is not { IsDead: false, IsTargetable: true } || !target.CanUseAttackActionOn() ||
             TargetHelper.TargetHasInvincibilityStatus(target) || JobGaugeHelper.VPR.祖灵力档数 != 0 ||
             (int)JobGaugeHelper.VPR.蛇剑连状态 != 0 || Skills.Vicewinder.GetActionCharges() < 1 ||
             me.GetStatusLeftTime(Buffs.ReadyToReawaken) > 0 ||
-            !Skills.Vicewinder.IsActionAvailableByLevelAndQuest() || !Skills.Reawaken.IsActionAvailableByLevelAndQuest() ||
+            !Skills.Vicewinder.IsActionAvailableByLevelAndQuest() ||
+            !Skills.Reawaken.IsActionAvailableByLevelAndQuest() ||
             !Skills.SerpentsIre.IsActionAvailableByLevelAndQuest() || !ActionHelper.IsReady(Skills.SerpentsIre)) return null;
         var firstUsed = _prepullAttack.IsRecentFirstHit(Environment.TickCount64, target.EntityId, Skills.ReavingFangs) ||
             ActionHelper.RecentlyUsed(Skills.ReavingFangs, 2500) && ActionHelper.GetComboLeftTime() > 0 &&
             Skills.ReavingFangs.GetAdjustedActionId() == Skills.SwiftskinsSting;
-        return new ViperFruOpener(firstUsed);
-    }
-
-    internal bool BindFruOpener(ViperFruOpener opener)
-    {
-        if (PromeSettings.Instance.EnableAcr != AcrState.On || !UsesFruOpener ||
-            PRCore.Me is not { IsDead: false } me || me.ClassJob.RowId != 41 ||
-            !FruOpener.CanStart(me.Level, Options()) || !GameData.IsInCombat() || GameData.IsInPvPArea() ||
-            !IsTargetWithinAttackRange() || PRCore.Target is not { IsDead: false, IsTargetable: true } target ||
-            !target.CanUseAttackActionOn() || TargetHelper.TargetHasInvincibilityStatus(target)) return false;
-        _activeFruOpener = opener;
-        return true;
+        return new ViperStandardOpener(firstUsed);
     }
 
     internal bool BindStandardOpener(ViperStandardOpener opener)
     {
-        if (PromeSettings.Instance.EnableAcr != AcrState.On || !UsesStandardOpener || !IsTargetWithinAttackRange() || !StandardOpener.CanStart(Options()) ||
-            !GameData.IsInCombat() || PRCore.Target is not { IsDead: false, IsTargetable: true } target) return false;
-        _activeOpener = opener;
+        if (PromeSettings.Instance.EnableAcr != AcrState.On || !UsesStandardOpener ||
+            PRCore.Me is not { IsDead: false } me || me.ClassJob.RowId != 41 ||
+            !StandardOpener.CanStart(me.Level, Options()) || !GameData.IsInCombat() || GameData.IsInPvPArea() ||
+            !IsTargetWithinAttackRange() || PRCore.Target is not { IsDead: false, IsTargetable: true } target ||
+            !target.CanUseAttackActionOn() || TargetHelper.TargetHasInvincibilityStatus(target)) return false;
+        _activeStandardOpener = opener;
         _openerTarget = target.EntityId;
         _openerPhaseTime = Environment.TickCount64;
         return true;
     }
+
     public IRotationEventHandler GetEventHandler() => _events;
     public void UpdateDebugStatus()
     {
